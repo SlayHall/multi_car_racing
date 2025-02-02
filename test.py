@@ -74,6 +74,7 @@ class DQN(nn.Module):
     x = F.relu(self.conv1(x))
     x = F.relu(self.conv2(x))
     x = F.relu(self.conv3(x))
+    x = F.relu(self.conv4(x))
     x = x.view(x.size(0), -1)     # Flatten the output of the last conv layer
     x = F.relu(self.fc1(x))       # Pass through the fully connected layer
     x = self.fc2(x)               # Output the Q-values for each action
@@ -110,9 +111,9 @@ buffer_append(grayscale_obs)
 
 # Start the simulation---------------------------------------------------------------------------------
 while not done:
-  state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).unsqueeze(0).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
+  state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
   with torch.no_grad():
-    q_values = dqn(state_tensor)                        # Get the Q-values for each action for each agent example:[[-1.2, 0.5, 0.8, 2.1, 0.3], [-1.2, 0.5, 0.8, 2.1, 0.3]]
+    q_values = [dqn(state_tensor[i].unsqueeze(0)) for i in range(2)]  # Process each agent separately                       # Get the Q-values for each action for each agent example:[[-1.2, 0.5, 0.8, 2.1, 0.3], [-1.2, 0.5, 0.8, 2.1, 0.3]]
   
   dqn_actions_Q_value = [torch.argmax(q_values[i]).item() for i in range(2)]                     # Get the action with the highest Q-value for each agent example:[3, 3]
   dqn_action = [deiscrete_action_space(a) for a in dqn_actions_Q_value]                          # Convert the action to the discrete action space example:[[0, 0, 1], [0, 0, 1]]
