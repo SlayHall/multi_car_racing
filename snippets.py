@@ -88,3 +88,19 @@ while not done:
     action_list = [discrete_action_space(a) for a in actions]
     
     obs, reward, done, info = env.step(action_list)
+
+'''
+The warning: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow...
+
+is informing you that converting a list of NumPy arrays to a tensor is less efficient. If you run into performance issues later, consider converting the list to a single NumPy array first. For example, you can modify your function as follows:
+
+def Convert_Frame_Buffer_to_Tensor(frame_buffers):
+    stacked_frames = []
+    for i in range(2):
+        frames = frame_buffers[i][-buffer_size:]
+        stacked_frames.append(np.stack(frames, axis=0))
+    # Convert the list of arrays into a single numpy array before converting to tensor
+    stacked_frames = np.array(stacked_frames)
+    return torch.tensor(stacked_frames, dtype=torch.float32)
+
+'''

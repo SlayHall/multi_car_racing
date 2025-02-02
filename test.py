@@ -96,6 +96,8 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
     stacked_frames.append(np.stack(frames, axis=0))         # Stack them along a new dimension
   return torch.tensor(stacked_frames, dtype=torch.float32)  # Convert the stacked frames to a tensor
 '''
+  there is a warning: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow...
+  the fix is in snippets.py
   shape = Convert_Frame_Buffer_to_Tensor(frame_buffers).shape
   print("shape:", shape)
 '''
