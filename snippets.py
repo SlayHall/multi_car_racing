@@ -19,6 +19,9 @@ else:
 
 
 # init Double DQN models
+state, info = env.reset()
+n_observations = len(state)
+
 policy_net = DQN(66,66,n_actions,ACTION_SKIP).to(device)
 target_net = DQN(66,66,n_actions,ACTION_SKIP).to(device)
 target_net.load_state_dict(policy_net.state_dict())
@@ -69,3 +72,19 @@ class DQN(nn.Module):
         x = F.relu(self.fc1(x))
         x = self.fc2(x)
         return x   
+    
+
+def get_stacked_state():
+    stacked_states = [np.stack(frame_buffers[i], axis=0) for i in range(2)]
+    return torch.tensor(stacked_states, dtype=torch.float32)
+
+while not done:
+    state_tensor = get_stacked_state().unsqueeze(0).to(device)
+    
+    with torch.no_grad():
+        q_values = dqn(state_tensor)
+    
+    actions = [torch.argmax(q_values[i]).item() for i in range(2)]  
+    action_list = [discrete_action_space(a) for a in actions]
+    
+    obs, reward, done, info = env.step(action_list)

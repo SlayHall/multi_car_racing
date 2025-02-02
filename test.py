@@ -67,7 +67,7 @@ class DQN(nn.Module):
     self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=2, padding=1)              # (64, 24, 24) -> (64, 12, 12)
     self.conv4 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=2, padding=1)             # (64, 12, 12) -> (128, 6, 6)
 
-    self.fc1 = nn.Linear(128 * 6 * 6, 512)      #input 4608 output 512 flatten the output of the last conv layer
+    self.fc1 = nn.Linear(128 * 6 * 6, 512)     #input 4608 output 512 flatten the output of the last conv layer
     self.fc2 = nn.Linear(512, num_actions)     #input 512 output 5  q-values for each action
 
   def forward(self, x):
@@ -75,29 +75,55 @@ class DQN(nn.Module):
     x = F.relu(self.conv2(x))
     x = F.relu(self.conv3(x))
     x = x.view(x.size(0), -1)     # Flatten the output of the last conv layer
-    x = F.relu(self.fc1(x))
+    x = F.relu(self.fc1(x))       # Pass through the fully connected layer
     x = self.fc2(x)               # Output the Q-values for each action
     return x
 
+# select computing device and number of episodes-----------------------------------------------------------
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available() or torch.backends.mps.is_available():
+    num_episodes = 600
+else:
+    num_episodes = 50
 
-# Reset the environment---------------------------------------------------------------------------------
+dqn = DQN().to(device)      # Initialize the DQN model
+
+def Convert_Frame_Buffer_to_Tensor(frame_buffers):
+  stacked_frames = []
+  for i in range(2):
+    frames = frame_buffers[i][-buffer_size:]                # Get the last 4 frames for each agent
+    stacked_frames.append(np.stack(frames, axis=0))         # Stack them along a new dimension
+  return torch.tensor(stacked_frames, dtype=torch.float32)  # Convert the stacked frames to a tensor
+'''
+  shape = Convert_Frame_Buffer_to_Tensor(frame_buffers).shape
+  print("shape:", shape)
+'''
+
+# initialize the environment---------------------------------------------------------------------------------
+
 obs = env.reset()
 done = False
 total_reward = 0
 
+grayscale_obs = grayscale(obs)
+buffer_append(grayscale_obs)
+
 # Start the simulation---------------------------------------------------------------------------------
 while not done:
+  state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).unsqueeze(0).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
+  with torch.no_grad():
+    q_values = dqn(state_tensor)                        # Get the Q-values for each action for each agent example:[[-1.2, 0.5, 0.8, 2.1, 0.3], [-1.2, 0.5, 0.8, 2.1, 0.3]]
   
-  action = [[np.random.uniform(-1,1), np.random.uniform(-1,1), np.random.uniform(-1,1)], [np.random.uniform(-1,1), np.random.uniform(-1,1), np.random.uniform(-1,1)]]
+  dqn_actions_Q_value = [torch.argmax(q_values[i]).item() for i in range(2)]                     # Get the action with the highest Q-value for each agent example:[3, 3]
+  dqn_action = [deiscrete_action_space(a) for a in dqn_actions_Q_value]                          # Convert the action to the discrete action space example:[[0, 0, 1], [0, 0, 1]]
+ 
+  random_action = [[np.random.uniform(-1,1), np.random.uniform(-1,1), np.random.uniform(-1,1)],  # Random action for each agent
+             [np.random.uniform(-1,1), np.random.uniform(-1,1), np.random.uniform(-1,1)]]
 
-  
-  # obs is of shape (num_agents, 96, 96, 3)
-  # reward is of shape (num_agents,)
-  # done is a bool and info is not used (an empty dict).
-  obs, reward, done, info = env.step(action)
+  obs, reward, done, info = env.step(random_action)     # obs is of shape (num_agents, 96, 96, 3) reward is of shape (num_agents,)
 
-  # Process the first observation and fill the buffers
-  grayscale_obs = grayscale(obs)
+
+  grayscale_obs = grayscale(obs)                        # Process the first observation and fill the buffers
   buffer_append(grayscale_obs)
   
   total_reward += reward
