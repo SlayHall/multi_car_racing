@@ -85,7 +85,7 @@ class DQN(nn.Module):
 # select computing device and number of episodes-----------------------------------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 600
+    num_episodes = 100
 else:
     num_episodes = 50
 
@@ -108,6 +108,7 @@ must check the shape of the tensor later on
 
 ########################### Step 4: Implement the Replay Buffer------------------------------------------------------------
 
+# 1) Create a ReplayBuffer class.
 class ReplayBuffer:
   def __init__(self):
       self.rreplya_buffer = deque(maxlen=100000)  # Initialize the buffer with a maximum length of 100000
@@ -128,20 +129,26 @@ class ReplayBuffer:
     
     return state, action, reward, next_state, done
 
-
+#2)Initialize a separate replay buffer for each agent.
 replay_buffer = [ReplayBuffer() , ReplayBuffer()]  # Initialize the replay buffer for 2 agents  
 
   
-# initialize the environment---------------------------------------------------------------------------------
 
+
+########################## Step 5: Train the DQN---------------------------------------------------------------------------------
+
+
+# old initialize the environment---------------------------------------------------------------------------------
+'''
 obs = env.reset()
 done = False
 total_reward = 0
 
 grayscale_obs = grayscale(obs)
 buffer_append(grayscale_obs)
-
-# Start the simulation---------------------------------------------------------------------------------
+'''
+# old loop ---------------------------------------------------------------------------------
+'''
 while not done:
   state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
   with torch.no_grad():
@@ -161,5 +168,55 @@ while not done:
   
   total_reward += reward
   env.render()
+'''
+
+# hyperparameters---------------------------------------------------------------------------------
+epsilon = 1.0
+epsilon_decay = 0.995
+epsilon_min = 0.05
+
+aadam_learning_rate = 0.001
+optimizer = torch.optim.Adam(dqn.parameters(), lr=aadam_learning_rate)
+gamma = 0.99
+
+batch_size = 32
+
+# functions for training the DQN-----------------------------------------------------------------
+
+def epsilon_greedy_policy(agent_index):
+  if random.random() < epsilon:
+    return np.random.randint(5)    # Random action
+  else:
+    with torch.no_grad():
+      q_values = dqn(state_tensor[agent_index].unsqueeze(0))
+
+
+
+
+# loop---------------------------------------------------------------------------------
+
+for i_episode in range(num_episodes):              #initialize the episode
+  obs = env.reset()
+  done = False
+  total_reward = 0
+
+  grayscale_obs = grayscale(obs)
+  buffer_append(grayscale_obs)
+
+  for agent in range(2):
+     for zeroing in range(buffer_size):
+        replay_buffer[agent] = np.zeros((96, 96))  # Initialize the buffer with zeros
+
+  while not done:                                  #start training episode
+     
+     # 1) Use the epsilon-greedy policy to select an action for each agent.
+
+    for agent in range(2):
+        action = epsilon_greedy_policy(agent)      # Select an action for each agent using the epsilon-greedy policy
+        
+
+
+
+
 
 print("individual scores:", total_reward)
