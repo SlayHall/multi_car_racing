@@ -93,7 +93,7 @@ while not done:
 The warning: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow...
 
 is informing you that converting a list of NumPy arrays to a tensor is less efficient. If you run into performance issues later, consider converting the list to a single NumPy array first. For example, you can modify your function as follows:
-
+'''
 def Convert_Frame_Buffer_to_Tensor(frame_buffers):
     stacked_frames = []
     for i in range(2):
@@ -103,4 +103,3 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
     stacked_frames = np.array(stacked_frames)
     return torch.tensor(stacked_frames, dtype=torch.float32)
 
-'''

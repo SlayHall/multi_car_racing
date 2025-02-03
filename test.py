@@ -5,6 +5,8 @@ import cv2
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from collections import deque
+import random
 
 
 ########################## Step 1: Initialize the environment --------------------------------------------
@@ -94,14 +96,42 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
   for i in range(2):
     frames = frame_buffers[i][-buffer_size:]                # Get the last 4 frames for each agent
     stacked_frames.append(np.stack(frames, axis=0))         # Stack them along a new dimension
+  stacked_frames = np.array(stacked_frames)                 # Convert the list of arrays into a single numpy array  
   return torch.tensor(stacked_frames, dtype=torch.float32)  # Convert the stacked frames to a tensor
 '''
+must check the shape of the tensor later on
   there is a warning: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow...
   the fix is in snippets.py
   shape = Convert_Frame_Buffer_to_Tensor(frame_buffers).shape
   print("shape:", shape)
 '''
 
+########################### Step 4: Implement the Replay Buffer------------------------------------------------------------
+
+class ReplayBuffer:
+  def __init__(self):
+      self.rreplya_buffer = deque(maxlen=100000)  # Initialize the buffer with a maximum length of 100000
+
+  def add(self, state, action, reward, next_state, done):
+      self.rreplya_buffer.append((state, action, reward, next_state, done))  # Add the transition to the buffer
+
+  def sample(self, sampel_batch_size):
+    sample = random.sample(self.rreplya_buffer, sampel_batch_size)          # Sample a batch of transitions without replacments , they are tuples that must be unpacked
+    state , action, reward, next_state, done = map(list, zip(*sample))      # Unpack the batch of transitions
+    
+    # Convert the batch of transitions to tensors--------------------------------
+    state = torch.tensor(state, dtype=torch.float32).to(device)
+    action = torch.tensor(action, dtype=torch.float32).to(device)
+    reward = torch.tensor(reward, dtype=torch.float32).to(device)
+    next_state = torch.tensor(next_state, dtype=torch.float32).to(device)
+    done = torch.tensor(done, dtype=torch.float32).to(device)
+    
+    return state, action, reward, next_state, done
+
+
+replay_buffer = [ReplayBuffer() , ReplayBuffer()]  # Initialize the replay buffer for 2 agents  
+
+  
 # initialize the environment---------------------------------------------------------------------------------
 
 obs = env.reset()
