@@ -240,7 +240,7 @@ for i_episode in range(num_episodes):              #initialize the episode
 
     # 2) Store the transition in the replay buffer.
     for agent in range(2):
-        replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
+        replay_buffer[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
 
     # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
     if len(replay_buffer[0].rreplya_buffer) > batch_size:
