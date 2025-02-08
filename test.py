@@ -137,18 +137,18 @@ replay_buffer = [ReplayBuffer() , ReplayBuffer()]  # Initialize the replay buffe
 
 ########################## Step 5: Train the DQN---------------------------------------------------------------------------------
 
-
-# old initialize the environment---------------------------------------------------------------------------------
 '''
+# old initialize the environment---------------------------------------------------------------------------------
+
 obs = env.reset()
 done = False
 total_reward = 0
 
 grayscale_obs = grayscale(obs)
 buffer_append(grayscale_obs)
-'''
+
 # old loop ---------------------------------------------------------------------------------
-'''
+
 while not done:
   state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
   with torch.no_grad():
@@ -168,8 +168,8 @@ while not done:
   
   total_reward += reward
   env.render()
-'''
 
+'''
 # hyperparameters---------------------------------------------------------------------------------
 epsilon = 1.0
 epsilon_decay = 0.995
@@ -181,14 +181,8 @@ gamma = 0.99
 
 batch_size = 32
 
+render_every = 50
 # functions for training the DQN-----------------------------------------------------------------
-
-def epsilon_greedy_policy(agent_index):
-  if random.random() < epsilon:
-    return np.random.randint(5)    # Random action
-  else:
-    with torch.no_grad():
-      q_values = dqn(state_tensor[agent_index].unsqueeze(0))
 
 
 
@@ -200,23 +194,72 @@ for i_episode in range(num_episodes):              #initialize the episode
   done = False
   total_reward = 0
 
-  grayscale_obs = grayscale(obs)
-  buffer_append(grayscale_obs)
+  
 
   for agent in range(2):
      for zeroing in range(buffer_size):
-        replay_buffer[agent] = np.zeros((96, 96))  # Initialize the buffer with zeros
+        frame_buffers[agent].append(np.zeros((96, 96)))  # Initialize the buffer with zeros
+  
+  grayscale_obs = grayscale(obs)
+  buffer_append(grayscale_obs)
 
   while not done:                                  #start training episode
+    
+    state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
+    q_actions =[]
      
      # 1) Use the epsilon-greedy policy to select an action for each agent.
 
     for agent in range(2):
-        action = epsilon_greedy_policy(agent)      # Select an action for each agent using the epsilon-greedy policy
-        
+        if random.random() < epsilon:                                    # Random action eploration
+            q_actions.append(np.random.randint(5))          
+        else:
+            with torch.no_grad():                                        # Exploitation
+                q_values = dqn(state_tensor[agent].unsqueeze(0))
+                q_actions.append(torch.argmax(q_values).item())
+    
+    descreat_actions = [deiscrete_action_space(a) for a in q_actions]    # Convert the action to the discrete action space 
+
+    obs, reward, done, info = env.step(descreat_actions)                 # step the enviroment obs is of shape (num_agents, 96, 96, 3) reward is of shape (num_agents,)
+    grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
+    buffer_append(grayscale_obs)
+  
+    total_reward += reward
+
+    if num_episodes % render_every == 0:         # Render the environment every set number of episodes
+      env.render()
+
+    next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
+
+    # 2) Store the transition in the replay buffer.
+    for agent in range(2):
+        replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
+
+    # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
+    if len(replay_buffer[0].rreplya_buffer) > batch_size:
+        for agent in range(2):
+            state, action, reward, next_state, done = replay_buffer[agent].sample(batch_size)
+            
+            q_values = dqn(state)
+            next_q_values = dqn(next_state)
+            target_q_values = q_values.clone()
+            
+            for i in range(batch_size):
+                target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - done[i])
+            
+            loss = F.mse_loss(q_values, target_q_values)
+
+            optimizer.zero_grad()   # Zero the gradients
+            loss.backward()         # Backpropagate the loss
+            optimizer.step()        # Update the DQN parameters
+
+    
+    epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
 
 
+  print("individual scores:", total_reward)
+  print("epsilon:", epsilon)
+  print("episode:", i_episode)
+  print("------------------------------------------------------")
 
-
-
-print("individual scores:", total_reward)
+env.close()  # Close the environment after training
