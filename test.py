@@ -120,11 +120,13 @@ class ReplayBuffer:
     sample = random.sample(self.rreplya_buffer, sampel_batch_size)          # Sample a batch of transitions without replacments , they are tuples that must be unpacked
     state , action, reward, next_state, done = map(list, zip(*sample))      # Unpack the batch of transitions
     
-    # Convert the batch of transitions to tensors--------------------------------
-    state = torch.tensor(state, dtype=torch.float32).to(device)
-    action = torch.tensor(action, dtype=torch.float32).to(device)
+    ## ## Convert the batch of transitions to tensors--------------------------------
+    #state = torch.tensor(state, dtype=torch.float32).to(device)
+    state = torch.stack(state).to(device)
+    action = torch.tensor(action, dtype=torch.int64).to(device)
     reward = torch.tensor(reward, dtype=torch.float32).to(device)
-    next_state = torch.tensor(next_state, dtype=torch.float32).to(device)
+    #next_state = torch.tensor(next_state, dtype=torch.float32).to(device)
+    next_state = torch.stack(next_state).to(device)
     done = torch.tensor(done, dtype=torch.float32).to(device)
     
     return state, action, reward, next_state, done
@@ -221,12 +223,13 @@ for i_episode in range(num_episodes):              #initialize the episode
     descreat_actions = [deiscrete_action_space(a) for a in q_actions]    # Convert the action to the discrete action space 
 
     obs, reward, done, info = env.step(descreat_actions)                 # step the enviroment obs is of shape (num_agents, 96, 96, 3) reward is of shape (num_agents,)
+    print(done)
     grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
     buffer_append(grayscale_obs)
   
     total_reward += reward
 
-    if num_episodes % render_every == 0:         # Render the environment every set number of episodes
+    if i_episode % render_every == 0:         # Render the environment every set number of episodes
       env.render()
 
     next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
@@ -240,6 +243,7 @@ for i_episode in range(num_episodes):              #initialize the episode
         for agent in range(2):
             state, action, reward, next_state, done = replay_buffer[agent].sample(batch_size)
             
+
             q_values = dqn(state)
             next_q_values = dqn(next_state)
             target_q_values = q_values.clone()
@@ -253,13 +257,15 @@ for i_episode in range(num_episodes):              #initialize the episode
             loss.backward()         # Backpropagate the loss
             optimizer.step()        # Update the DQN parameters
 
-    
+            done = done.bool().any().item()    #return done as a boolean value
+
     epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
 
 
   print("individual scores:", total_reward)
   print("epsilon:", epsilon)
   print("episode:", i_episode)
+  print("loss:", loss.item())
   print("------------------------------------------------------")
 
 env.close()  # Close the environment after training
