@@ -85,7 +85,7 @@ class DQN(nn.Module):
 # select computing device and number of episodes-----------------------------------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 600
+    num_episodes = 100
 else:
     num_episodes = 50
 
