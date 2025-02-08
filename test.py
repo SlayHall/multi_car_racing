@@ -34,7 +34,7 @@ def buffer_append(new_frame):
   for i in range(2):  
         frame_buffers[i].append(new_frame[i])  # Store the respective agent's frame
         if len(frame_buffers[i]) > buffer_size:
-            frame_buffers[i].pop()
+            frame_buffers[i].pop(0)
 
 
 def grayscale(frame):
@@ -223,14 +223,13 @@ for i_episode in range(num_episodes):              #initialize the episode
     descreat_actions = [deiscrete_action_space(a) for a in q_actions]    # Convert the action to the discrete action space 
 
     obs, reward, done, info = env.step(descreat_actions)                 # step the enviroment obs is of shape (num_agents, 96, 96, 3) reward is of shape (num_agents,)
-    print(done)
     grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
     buffer_append(grayscale_obs)
   
     total_reward += reward
 
-    if i_episode % render_every == 0:         # Render the environment every set number of episodes
-      env.render()
+    #if (i_episode !=0) % render_every == 0:         # Render the environment every set number of episodes
+      #env.render()
 
     next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
 
