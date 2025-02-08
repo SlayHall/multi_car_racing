@@ -99,6 +99,10 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
   stacked_frames = np.array(stacked_frames)                 # Convert the list of arrays into a single numpy array  
   return torch.tensor(stacked_frames, dtype=torch.float32)  # Convert the stacked frames to a tensor
 '''
+  fix 1)   return torch.from_numpy(stacked_frames).float()  # More efficient conversion
+'''
+
+'''
 must check the shape of the tensor later on
   there is a warning: UserWarning: Creating a tensor from a list of numpy.ndarrays is extremely slow...
   the fix is in snippets.py
@@ -207,6 +211,7 @@ for i_episode in range(num_episodes):              #initialize the episode
 
   while not done:                                  #start training episode
     
+
     state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)           #shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
     q_actions =[]
      
@@ -223,6 +228,7 @@ for i_episode in range(num_episodes):              #initialize the episode
     descreat_actions = [deiscrete_action_space(a) for a in q_actions]    # Convert the action to the discrete action space 
 
     obs, reward, done, info = env.step(descreat_actions)                 # step the enviroment obs is of shape (num_agents, 96, 96, 3) reward is of shape (num_agents,)
+    
     grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
     buffer_append(grayscale_obs)
   
@@ -249,15 +255,17 @@ for i_episode in range(num_episodes):              #initialize the episode
             for i in range(batch_size):
                 target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])
             
+
+
             loss = F.mse_loss(q_values, target_q_values)
 
             optimizer.zero_grad()   # Zero the gradients
             loss.backward()         # Backpropagate the loss
             optimizer.step()        # Update the DQN parameters
 
-            
+    
 
-    epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
+  epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
 
 
   print("individual scores:", total_reward)
@@ -265,5 +273,21 @@ for i_episode in range(num_episodes):              #initialize the episode
   print("episode:", i_episode)
   print("loss:", loss)
   print("------------------------------------------------------")
+
+if i_episode == num_episodes - 1:
+  print("Training complete!")
+  see = input("do you wanna render the environment?")
+  if see == 'y':
+     env.render()
+
+
+
+  rspounce = input("Do you want to save the model? (y/n): ")
+  if rspounce == 'y':
+    torch.save(dqn.state_dict(), "dqn_model.pth")
+    print("Model saved successfully!")
+  else:
+    print("Model not saved!")
+
 
 env.close()  # Close the environment after training
