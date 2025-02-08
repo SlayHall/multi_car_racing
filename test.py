@@ -228,8 +228,7 @@ for i_episode in range(num_episodes):              #initialize the episode
   
     total_reward += reward
 
-    #if (i_episode !=0) % render_every == 0:         # Render the environment every set number of episodes
-      #env.render()
+    
 
     next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
 
@@ -264,7 +263,7 @@ for i_episode in range(num_episodes):              #initialize the episode
   print("individual scores:", total_reward)
   print("epsilon:", epsilon)
   print("episode:", i_episode)
-  print("loss:", loss.item())
+  print("loss:", loss)
   print("------------------------------------------------------")
 
 env.close()  # Close the environment after training
