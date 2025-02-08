@@ -85,7 +85,7 @@ class DQN(nn.Module):
 # select computing device and number of episodes-----------------------------------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 100
+    num_episodes = 600
 else:
     num_episodes = 50
 
@@ -240,7 +240,7 @@ for i_episode in range(num_episodes):              #initialize the episode
 
     # 2) Store the transition in the replay buffer.
     for agent in range(2):
-        replay_buffer[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
+        replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
 
     # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
     if len(replay_buffer[0].rreplya_buffer) > batch_size:
@@ -266,6 +266,7 @@ for i_episode in range(num_episodes):              #initialize the episode
     
 
   epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
+  torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
 
 
   print("individual scores:", total_reward)
@@ -286,8 +287,11 @@ if i_episode == num_episodes - 1:
   if rspounce == 'y':
     torch.save(dqn.state_dict(), "dqn_model.pth")
     print("Model saved successfully!")
-  else:
+  elif rspounce == 'n':
     print("Model not saved!")
+  else:
+    torch.save(dqn.state_dict(), "dqn_model.pth")
+    print("Model saved successfully! anyway lol")
 
 
 env.close()  # Close the environment after training
