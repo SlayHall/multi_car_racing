@@ -240,7 +240,7 @@ for i_episode in range(num_episodes):              #initialize the episode
     # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
     if len(replay_buffer[0].rreplya_buffer) > batch_size:
         for agent in range(2):
-            state, action, reward, next_state, done = replay_buffer[agent].sample(batch_size)
+            state, action, reward, next_state, r_done = replay_buffer[agent].sample(batch_size)
             
 
             q_values = dqn(state)
@@ -248,7 +248,7 @@ for i_episode in range(num_episodes):              #initialize the episode
             target_q_values = q_values.clone()
             
             for i in range(batch_size):
-                target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - done[i])
+                target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])
             
             loss = F.mse_loss(q_values, target_q_values)
 
@@ -256,7 +256,7 @@ for i_episode in range(num_episodes):              #initialize the episode
             loss.backward()         # Backpropagate the loss
             optimizer.step()        # Update the DQN parameters
 
-            done = done.bool().any().item()    #return done as a boolean value
+            
 
     epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
 
