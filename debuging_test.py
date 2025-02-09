@@ -116,13 +116,13 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
 # 1) Create a ReplayBuffer class.
 class ReplayBuffer:
     def __init__(self):
-        self.rreplya_buffer = deque(maxlen=100000)  # Initialize the buffer with a maximum length of 100000
+        self.rreplya_buffer_deque = deque(maxlen=100000)  # Initialize the buffer with a maximum length of 100000
 
     def add(self, state, action, reward, next_state, done):
-        self.rreplya_buffer.append((state, action, reward, next_state, done))  # Add the transition to the buffer
+        self.rreplya_buffer_deque.append((state, action, reward, next_state, done))  # Add the transition to the buffer
 
     def sample(self, sample_batch_size):
-        sample = random.sample(self.rreplya_buffer, sample_batch_size)          # Sample a batch of transitions without replacements, they are tuples that must be unpacked
+        sample = random.sample(self.rreplya_buffer_deque, sample_batch_size)          # Sample a batch of transitions without replacements, they are tuples that must be unpacked
         state, action, reward, next_state, done = map(list, zip(*sample))      # Unpack the batch of transitions
         
         ## Convert the batch of transitions to tensors--------------------------------
@@ -166,7 +166,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
     while not done:                                  # Start training episode
         loops += 1
-        print(f"loops completed: {loops} and deque length: {len(replay_buffer[agent].rreplya_buffer)} of size {sys.getsizeof(replay_buffer[agent].rreplya_buffer)/(1024*1024)} MB", end="\r", flush=True)
+        print(f"loops completed: {loops} and deque length: {len(replay_buffer[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB", end="\r", flush=True)
 
         state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
 
@@ -194,10 +194,10 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
         # 2) Store the transition in the replay buffer.
         for agent in range(2):
-            replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
+            replay_buffer[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
       
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
-        if len(replay_buffer[0].rreplya_buffer) > batch_size:
+        if len(replay_buffer[0].rreplya_buffer_deque) > batch_size:
             for agent in range(2):
                 state, action, reward, next_state, r_done = replay_buffer[agent].sample(batch_size)
                 
@@ -209,6 +209,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
                     target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])
 
                 loss = F.mse_loss(q_values, target_q_values)
+                
 
                 optimizer.zero_grad()   # Zero the gradients
                 loss.backward()         # Backpropagate the loss
@@ -228,6 +229,9 @@ if i_episode == num_episodes - 1:
     print("Training complete!")
     see = input("do you wanna render the environment?")
     if see == 'y':
+        env.render()
+    else:
+        print("Ok, just watch")
         env.render()
 
     rspounce = input("Do you want to save the model? (y/n): ")
