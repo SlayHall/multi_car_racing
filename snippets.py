@@ -103,3 +103,13 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
     stacked_frames = np.array(stacked_frames)
     return torch.tensor(stacked_frames, dtype=torch.float32)
 
+################# debuging #################
+import tracemalloc                          #for memmory usage
+tracemalloc.start()
+
+snapshot1 = tracemalloc.take_snapshot()
+# ... run some iterations of your code ...
+snapshot2 = tracemalloc.take_snapshot()
+top_stats = snapshot2.compare_to(snapshot1, 'lineno')
+for stat in top_stats[:10]:
+    print(stat)
