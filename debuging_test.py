@@ -119,6 +119,18 @@ class ReplayBuffer:
         self.rreplya_buffer_deque = deque(maxlen=100000)  # Initialize the buffer with a maximum length of 100000
 
     def add(self, state, action, reward, next_state, done):
+        if isinstance(state, torch.Tensor):
+            state = state.detach().cpu()
+        if isinstance(next_state, torch.Tensor):
+            next_state = next_state.detach().cpu()
+        if isinstance(reward, torch.Tensor):
+            reward = reward.detach().cpu()
+        if isinstance(done, torch.Tensor):
+            done = done.detach().cpu()
+        if isinstance(action, torch.Tensor):
+            action = action.detach().cpu()
+        
+
         self.rreplya_buffer_deque.append((state, action, reward, next_state, done))  # Add the transition to the buffer
 
     def sample(self, sample_batch_size):
@@ -194,7 +206,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
         # 2) Store the transition in the replay buffer.
         for agent in range(2):
-            replay_buffer[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
+            replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
       
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
         if len(replay_buffer[0].rreplya_buffer_deque) > batch_size:
