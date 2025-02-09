@@ -116,20 +116,16 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
 # 1) Create a ReplayBuffer class.
 class ReplayBuffer:
     def __init__(self):
-        self.rreplya_buffer_deque = deque(maxlen=100000)  # Initialize the buffer with a maximum length of 100000
+        self.rreplya_buffer_deque = deque(maxlen=10000)  # Initialize the buffer with a maximum length of 100000
 
     def add(self, state, action, reward, next_state, done):
-        if isinstance(state, torch.Tensor):
-            state = state.detach().cpu()
-        if isinstance(next_state, torch.Tensor):
-            next_state = next_state.detach().cpu()
-        if isinstance(reward, torch.Tensor):
-            reward = reward.detach().cpu()
-        if isinstance(done, torch.Tensor):
-            done = done.detach().cpu()
-        if isinstance(action, torch.Tensor):
-            action = action.detach().cpu()
-        
+
+        #state = state.cpu().detach().numpy()  # Convert the state tensor to a numpy array
+        #next_state = next_state.cpu().detach().numpy()  # Convert the next state tensor to a numpy array
+        #action = action.cpu().detach().numpy()  # Convert the action tensor to a numpy array
+        #reward = reward.cpu().detach().numpy()  # Convert the reward tensor to a numpy array
+        #done = done.cpu().detach().numpy()  # Convert the done tensor to a numpy array
+
 
         self.rreplya_buffer_deque.append((state, action, reward, next_state, done))  # Add the transition to the buffer
 
@@ -144,10 +140,11 @@ class ReplayBuffer:
         next_state = torch.stack(next_state).to(device)
         done = torch.tensor(done, dtype=torch.float32).to(device)
         
+
         return state, action, reward, next_state, done
 
 # 2) Initialize a separate replay buffer for each agent.
-replay_buffer = [ReplayBuffer(), ReplayBuffer()]  # Initialize the replay buffer for 2 agents  
+replay_buffer_list = [ReplayBuffer(), ReplayBuffer()]  # Initialize the replay buffer for 2 agents  
 
 ########################## Step 5: Train the DQN---------------------------------------------------------------------------------
 epsilon = 1.0
@@ -178,7 +175,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
     while not done:                                  # Start training episode
         loops += 1
-        print(f"loops completed: {loops} and deque length: {len(replay_buffer[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB", end="\r", flush=True)
+        print(f"loops completed: {loops} and deque length: {len(replay_buffer_list[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer_list[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB", end="\r", flush=True)
 
         state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
 
@@ -205,13 +202,14 @@ for i_episode in range(num_episodes):              # Initialize the episode
         next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
 
         # 2) Store the transition in the replay buffer.
+        
         for agent in range(2):
-            replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
+            replay_buffer_list[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
       
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
-        if len(replay_buffer[0].rreplya_buffer_deque) > batch_size:
+        if len(replay_buffer_list[0].rreplya_buffer_deque) > batch_size:
             for agent in range(2):
-                state, action, reward, next_state, r_done = replay_buffer[agent].sample(batch_size)
+                state, action, reward, next_state, r_done = replay_buffer_list[agent].sample(batch_size)
                 
                 q_values = dqn(state)
                 next_q_values = dqn(next_state)
