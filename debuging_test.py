@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from collections import deque
 import random
+
 import time
 import sys
 
@@ -107,6 +108,7 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
         frames = frame_buffers[i][-buffer_size:]                # Get the last 4 frames for each agent
         stacked_frames.append(np.stack(frames, axis=0))         # Stack them along a new dimension
     stacked_frames = np.array(stacked_frames)                   # Convert the list of arrays into a single numpy array  
+    return torch.from_numpy(stacked_frames).float()  # More efficient conversion
     return torch.tensor(stacked_frames, dtype=torch.float32)    # Convert the stacked frames to a tensor
 
 ########################### Step 4: Implement the Replay Buffer------------------------------------------------------------
@@ -164,7 +166,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
     while not done:                                  # Start training episode
         loops += 1
-        print(f"loops completed: {loops}", end="\r", flush=True)
+        print(f"loops completed: {loops} and deque length: {len(replay_buffer[agent].rreplya_buffer)} of size {sys.getsizeof(replay_buffer[agent].rreplya_buffer)/(1024*1024)} MB", end="\r", flush=True)
 
         state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
 
@@ -193,7 +195,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
         # 2) Store the transition in the replay buffer.
         for agent in range(2):
             replay_buffer[agent].add(state_tensor[agent], q_actions[agent], reward[agent], next_state_tensor[agent], done)
-
+      
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
         if len(replay_buffer[0].rreplya_buffer) > batch_size:
             for agent in range(2):
@@ -212,6 +214,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
                 loss.backward()         # Backpropagate the loss
                 optimizer.step()        # Update the DQN parameters
 
+    # end of episode  --------------------------------------------------------------------------------
     epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
     torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
 
