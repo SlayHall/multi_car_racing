@@ -96,7 +96,7 @@ class DQN(nn.Module):
 # select computing device and number of episodes-----------------------------------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available() or torch.backends.mps.is_available():
-    num_episodes = 100
+    num_episodes = 600
 else:
     num_episodes = 50
 
@@ -159,6 +159,7 @@ batch_size = 32
 
 render_every = 50
 
+num_episodes = 700
 
 
 for i_episode in range(num_episodes):              # Initialize the episode
@@ -235,23 +236,64 @@ for i_episode in range(num_episodes):              # Initialize the episode
     print("loss:", loss)
     print("------------------------------------------------------")
 
-if i_episode == num_episodes - 1:
-    print("Training complete!")
-    see = input("do you wanna render the environment?")
-    if see == 'y':
-        env.render()
-    else:
-        print("Ok, just watch")
-        env.render()
+    
 
-    rspounce = input("Do you want to save the model? (y/n): ")
-    if rspounce == 'y':
-        torch.save(dqn.state_dict(), "dqn_model.pth")
-        print("Model saved successfully!")
-    elif rspounce == 'n':
-        print("Model not saved!")
-    else:
-        torch.save(dqn.state_dict(), "dqn_model.pth")
-        print("Model saved successfully! anyway lol")
+########################## Step 6: Evaluate the DQN---------------------------------------------------------------------------------
+print("Training complete!")
+see = input("Do you wanna render the environment? (y/n): ")
+if see.lower() == 'y':
+    # Optionally, set the model to evaluation mode.
+    dqn.eval()
+    
+    obs = env.reset()
+    done = False
+    # Reset or initialize the frame buffers appropriately
+    for agent in range(2):
+        frame_buffers[agent] = [np.zeros((96, 96)) for _ in range(buffer_size)]
+    grayscale_obs = grayscale(obs)
+    buffer_append(grayscale_obs)
+    
+    while not done:
+        env.render()
+        
+        # Update state from frame buffers
+        state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
+        q_actions = []
+        with torch.no_grad():
+            for agent in range(2):
+                q_values = dqn(state_tensor[agent].unsqueeze(0))
+                q_actions.append(torch.argmax(q_values).item())
+                print(f"Agent {agent} Q-values: {q_values.cpu().numpy()} selected action: {q_actions[agent]}")
+        
+        discrete_actions = [deiscrete_action_space(a) for a in q_actions]
+        obs, reward, done, info = env.step(discrete_actions)
+        
+        # Update the frame buffers with the new observation
+        grayscale_obs = grayscale(obs)
+        buffer_append(grayscale_obs)
+        
+        time.sleep(0.05)  # Add a small delay so that rendering is visible
+        
+else:
+    print("Ok, just watch")
+    env.render()
+    time.sleep(5)
+
+
+
+
+
+
+
+
+rspounce = input("Do you want to save the model? (y/n): ")
+if rspounce == 'y':
+    torch.save(dqn.state_dict(), "dqn_model.pth")
+    print("Model saved successfully!")
+elif rspounce == 'n':
+    print("Model not saved!")
+else:
+    torch.save(dqn.state_dict(), "dqn_model.pth")
+    print("Model saved successfully! anyway lol")
 
 env.close()  # Close the environment after training
