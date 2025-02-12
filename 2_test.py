@@ -117,7 +117,7 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
 # 1) Create a ReplayBuffer class.
 class ReplayBuffer:
     def __init__(self):
-        self.rreplya_buffer_deque = deque(maxlen=13000)  # Initialize the buffer with a maximum length of 100000
+        self.rreplya_buffer_deque = deque(maxlen=20000)  # Initialize the buffer with a maximum length of 100000
 
     def add(self, state, action, reward, next_state, done):
 
