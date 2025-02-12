@@ -212,14 +212,14 @@ for i_episode in range(num_episodes):              # Initialize the episode
             for agent in range(2):
                 state, action, reward, next_state, r_done = replay_buffer_list[agent].sample(batch_size)
                 
-                q_values = dqn(state)
-                next_q_values = dqn(next_state)
-                target_q_values = q_values.clone()
+                q_values = dqn(state)               # Get the Q-values for the current state
+                next_q_values = dqn(next_state)     # Get the Q-values for the next state
+                target_q_values = q_values.clone()  # Clone the Q-values to calculate the target Q-values
                 
                 for i in range(batch_size):
-                    target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])
+                    target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])     # Calculate the target Q-values using the Bellman equation
 
-                loss = F.mse_loss(q_values, target_q_values)
+                loss = F.mse_loss(q_values, target_q_values)    # Calculate the loss using the mean squared error loss function   
                 
 
                 optimizer.zero_grad()   # Zero the gradients
@@ -235,6 +235,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
     print("episode:", i_episode)
     print("loss:", loss)
     print("------------------------------------------------------")
+
 
     
 
@@ -278,7 +279,7 @@ else:
     print("Ok, just watch")
     env.render()
     time.sleep(5)
-
+    
 
 
 

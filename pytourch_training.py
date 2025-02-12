@@ -10,7 +10,9 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.nn.functional as F
+# from playsound import playsound
 
+# playsound('mixkit-bell-notification-933.wav')
 env = gym.make("CartPole-v1")
 
 # set up matplotlib
