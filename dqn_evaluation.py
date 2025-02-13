@@ -41,7 +41,7 @@ class DQN(nn.Module):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 dqn = DQN().to(device)
 # Load the model state dictionary (ensure the file "dqn_model.pth" exists)
-dqn.load_state_dict(torch.load("dqn_model_300.pth", map_location=device))
+dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device))
 dqn.eval()  # Set model to evaluation mode
 
 # -----------------------------
@@ -131,7 +131,7 @@ while not done:
             actions.append(map_action(action_index))
     # Step the environment with the actions for each agent
     obs, reward, done, info = env.step(actions)
-    total_reward += sum(reward) if isinstance(reward, (list, tuple, np.ndarray)) else reward
+    total_reward += reward
 
     # Preprocess the new observation and update frame buffers
     gray_obs = grayscale(obs)
