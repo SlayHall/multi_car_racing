@@ -168,10 +168,14 @@ batch_size = 32
 
 render_every = 50
 
-num_episodes = 100
+num_episodes = 600
 
+episode_durations = []
 
 for i_episode in range(num_episodes):              # Initialize the episode
+    
+    start_episode = time.perf_counter()
+    
     obs = env.reset()
     done = False
     total_reward = 0
@@ -184,9 +188,11 @@ for i_episode in range(num_episodes):              # Initialize the episode
     loops = 0
 
     while not done:                                  # Start training episode
-        loops += 1
-        print(f"loops completed: {loops} and deque length: {len(replay_buffer_list[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer_list[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB", end="\r", flush=True)
 
+        loops += 1
+        print(f"loops completed: {loops} and ", end="\r", flush=True)
+        #deque length: {len(replay_buffer_list[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer_list[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB
+        
         state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
 
         q_actions = []
@@ -243,10 +249,26 @@ for i_episode in range(num_episodes):              # Initialize the episode
     epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
     torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
 
+    episode_duration = time.perf_counter() - start_episode
+    episode_durations.append(episode_duration)
+    avg_duration = sum(episode_durations) / len(episode_durations)
+    remaining_episodes = num_episodes - i_episode - 1
+    expected_remaining_time = avg_duration * remaining_episodes
+    remaining_minutes = expected_remaining_time / 60.0
+    if remaining_minutes > 59:
+        hours = int(remaining_minutes // 60)
+        minutes = int(remaining_minutes % 60)
+        expected_str = f"{hours}h {minutes}m"
+    else:
+        expected_str = f"{remaining_minutes:.2f} minutes"
+
+
     print("individual scores:", total_reward)
     print("epsilon:", epsilon)
-    print("episode:", i_episode)
-    print("loss:", loss)
+    #print("episode:", i_episode)
+    print("loss:", loss.item())
+    print(f"Episode {i_episode+1} finished in {episode_duration:.2f} seconds. "
+          f"Expected time to finish: {expected_str}.")
     print("------------------------------------------------------")
 
     if i_episode % target_update_frequency == 0:  # Update the target network every 10 episodes
@@ -307,12 +329,12 @@ else:
 
 rspounce = input("Do you want to save the model? (y/n): ")
 if rspounce == 'y':
-    torch.save(dqn.state_dict(), "dqn_model_100.pth")
+    torch.save(dqn.state_dict(), "dqn_model_600.pth")
     print("Model saved successfully!")
 elif rspounce == 'n':
     print("Model not saved!")
 else:
-    torch.save(dqn.state_dict(), "dqn_model_100.pth")
+    torch.save(dqn.state_dict(), "dqn_model_600.pth")
     print("Model saved successfully! anyway lol")
 
 env.close()  # Close the environment after training
