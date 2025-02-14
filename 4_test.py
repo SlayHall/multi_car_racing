@@ -148,12 +148,12 @@ else:
 
 
 def Convert_Frame_Buffer_to_Tensor(frame_buffers):
-    stacked_frames = [ [] , []]
+    stacked_frames = [ ]
     for i in range(2):
         frames = frame_buffers[i][-buffer_size:]                # Get the last 4 frames for each agent
-        stacked_frames[i].append(np.stack(frames, axis=0))      # Stack them along a new dimension stacked frames (4, 96, 96)
+        stacked_frames.append(np.stack(frames, axis=0))      # Stack them along a new dimension stacked frames (4, 96, 96)
     stacked_frames = np.array(stacked_frames)                   # Convert the list of arrays into a single numpy array  
-    return torch.from_numpy(stacked_frames).float()             # More efficient conversion
+    return torch.from_numpy(stacked_frames).float().to(device)            # More efficient conversion
     return torch.tensor(stacked_frames, dtype=torch.float32)    # Convert the stacked frames to a tensor
 
 ########################### Step 4: Implement the Replay Buffer------------------------------------------------------------
@@ -200,8 +200,7 @@ epsilon_decay = 0.995
 epsilon_min = 0.05
 
 aadam_learning_rate = 0.001
-for agent in range(2):
-    optimizer = torch.optim.Adam(dqn_agents[agent].parameters(), lr=aadam_learning_rate)
+optimizers = [torch.optim.Adam(dqn_agents[i].parameters(), lr=aadam_learning_rate) for i in range(2)]
 
 gamma = 0.99
 
@@ -212,6 +211,9 @@ render_every = 50
 num_episodes = 50
 
 episode_durations = []
+
+save_file_as = "dqn_model_50.pth"
+
 
 # dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device)) 
 # dqn.train() 
@@ -238,12 +240,18 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
     while not done:                                  # Start training episode
 
-        loops += 1
         print(f"loops completed: {loops} ", end="\r", flush=True)
         #deque length: {len(replay_buffer_list[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer_list[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB
         
-        state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device 
+        #process every 4th frame
+        if loops % buffer_skip == 0:
+            grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
+            buffer_append(grayscale_obs)
         
+        state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device 
+
+            
+
 
         '''
         2-Perform and action from state and observe the next stat and reward .
@@ -264,13 +272,9 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
         obs, reward, done, info = env.step(descreat_actions)                 # Step the environment, obs is of shape (num_agents, 96, 96, 3), reward is of shape (num_agents,)
         
-        #process every 4th frame
-        if loops % buffer_skip == 0:
-            grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
-            buffer_append(grayscale_obs)
+        
     
         
-        next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
 
         '''
         3 compute the reward
@@ -279,7 +283,16 @@ for i_episode in range(num_episodes):              # Initialize the episode
         total_reward += reward
 
         '''
-        4-store in the replay buffer
+        4-next state is the new current state
+        '''
+        grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
+        buffer_append(grayscale_obs)
+        next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device 
+
+
+
+        '''
+        5-store in the replay buffer
         '''
 
         # 2) Store the transition in the replay buffer.
@@ -287,26 +300,32 @@ for i_episode in range(num_episodes):              # Initialize the episode
         for agent in range(2):
             replay_buffer_list[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
             
-        '''
-        5-next state is the new current state ,,,, happened at the start of the loop
-        '''
-
+       
 
         '''
         6-run the batch training 
         '''
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
-        if len(replay_buffer_list[0].rreplya_buffer_deque) > batch_size:
-            for agent in range(2):
+
+        
+        for agent in range(2):
+            if len(replay_buffer_list[agent].rreplya_buffer_deque) > batch_size:
+            
                 state, action, reward, next_state, r_done = replay_buffer_list[agent].sample(batch_size)
-                optimizer = torch.optim.Adam(dqn_agents[agent].parameters(), lr=aadam_learning_rate)  # Separate optimizer per agent
+                
+                '''
+                Compute Q-values for current state
+                '''
                 
                 q_values = dqn_agents[agent](state)               # Get the Q-values for the current state
                 
-
+                '''
+                Compute target Q-values
+                '''
                 with torch.no_grad():
                     next_q_values = target_dqns[agent](next_state)     # Get the Q-values for the next state
-                
+
+
                 target_q_values = q_values.clone()  # Clone the Q-values to calculate the target Q-values
                 
                 for i in range(batch_size):
@@ -317,17 +336,18 @@ for i_episode in range(num_episodes):              # Initialize the episode
                 loss = F.mse_loss(q_values, target_q_values)    # Calculate the loss using the mean squared error loss function   
                 
 
-                optimizer.zero_grad()   # Zero the gradients
+                optimizers[agent].zero_grad()   # Zero the gradients
                 loss.backward()         # Backpropagate the loss
-                optimizer.step()        # Update the DQN parameters
+                torch.nn.utils.clip_grad_norm_(dqn_agents[agent].parameters(), max_norm=1.0)
+                optimizers[agent].step()        # Update the DQN parameters
 
-        epsilon = max(epsilon * (epsilon_decay ** batch_size), epsilon_min)
-    
+        loops += 1
+   
     '''
     # end of episode  --------------------------------------------------------------------------------
     '''
-    torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
-
+    #torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
+    epsilon = max(epsilon * epsilon_decay, epsilon_min)
 
     '''
     # calculate the time needed to finish
@@ -364,8 +384,9 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
 
     if i_episode % target_update_frequency == 0:  # Update the target network every 10 episodes
-        target_dqn.load_state_dict(dqn.state_dict())     # Update the target network with the DQN weights
-        print("Target network updated!")
+        for agent in range(2):
+            target_dqns[agent].load_state_dict(dqn_agents[agent].state_dict())        
+        print(f"Target network updated! 9Episode {i_episode}")
         print("-----------------------###----------------------------")
 
 
@@ -377,7 +398,8 @@ print("Training complete!")
 see = input("Do you wanna render the environment? (y/n): ")
 if see.lower() == 'y':
     # Optionally, set the model to evaluation mode.
-    dqn.eval()
+    for agent in dqn_agents:
+        agent.eval()
     
     obs = env.reset()
     done = False
@@ -395,7 +417,7 @@ if see.lower() == 'y':
         q_actions = []
         with torch.no_grad():
             for agent in range(2):
-                q_values = dqn(state_tensor[agent].unsqueeze(0))
+                q_values = dqn_agents[agent](state_tensor[agent].unsqueeze(0))
                 q_actions.append(torch.argmax(q_values).item())
                 #print(f"Agent {agent} Q-values: {q_values.cpu().numpy()} selected action: {q_actions[agent]}" , end="\r", flush=True)
 
@@ -417,17 +439,18 @@ else:
 
 
 
-file_name = "dqn_model_100.pth"
 
 
 rspounce = input("Do you want to save the model? (y/n): ")
 if rspounce == 'y':
-    torch.save(dqn.state_dict(), file_name)
+    for agent in range(2):
+        torch.save(dqn_agents[agent].state_dict(), f"agent_{agent}_{save_file_as}")
     print("Model saved successfully!")
 elif rspounce == 'n':
     print("Model not saved!")
 else:
-    torch.save(dqn.state_dict(), file_name)
+    for agent in range(2):
+        torch.save(dqn_agents[agent].state_dict(), f"agent_{agent}_{save_file_as}")
     print("Model saved successfully! anyway lol")
 
 env.close()  # Close the environment after training
