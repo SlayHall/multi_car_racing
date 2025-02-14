@@ -10,9 +10,10 @@ import random
 
 import time
 import sys
-from playsound import playsound
 import torch.optim as optim
+import matplotlib.pyplot as plt
 
+########################## helping code for memmory usage------------------------------------------------------------
 class Timer:
     def __init__(self):
         self.start_time = None
@@ -33,6 +34,49 @@ class Timer:
         return elapsed_time
 
 timer = Timer()
+
+
+def plot_conv_weights(conv_layer, title="Conv Layer Weights"):
+    # Extract weight data from the convolutional layer.
+    # Weight tensor shape: (out_channels, in_channels, kernel_height, kernel_width)
+    weights = conv_layer.weight.data.cpu().numpy()
+
+    # For visualization, if the filters have multiple channels, you can average them across channels.
+    num_filters = weights.shape[0]
+    num_channels = weights.shape[1]
+    kernel_h, kernel_w = weights.shape[2], weights.shape[3]
+    
+    # Create a figure with subplots.
+    # You can adjust the number of columns per row as needed.
+    ncols = min(num_filters, 8)
+    nrows = (num_filters + ncols - 1) // ncols
+    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols, nrows))
+    
+    # If there's only one row, wrap axes in a list for consistency.
+    if nrows == 1:
+        axes = [axes]
+    
+    for i in range(num_filters):
+        # Average across input channels to create a single 2D filter visualization.
+        filter_weights = np.mean(weights[i, :, :, :], axis=0)
+        row = i // ncols
+        col = i % ncols
+        
+        ax = axes[row][col] if nrows > 1 else axes[col]
+        ax.imshow(filter_weights, cmap='gray')
+        ax.set_title(f"Filter {i}")
+        ax.axis('off')
+    
+    # Hide any unused subplots
+    for j in range(i+1, nrows * ncols):
+        row = j // ncols
+        col = j % ncols
+        ax = axes[row][col] if nrows > 1 else axes[col]
+        ax.axis('off')
+    
+    plt.suptitle(title)
+    plt.tight_layout()
+    plt.show()
 
 ########################## Step 1: Initialize the environment --------------------------------------------
 
@@ -118,17 +162,9 @@ def Convert_Frame_Buffer_to_Tensor(frame_buffers):
 # 1) Create a ReplayBuffer class.
 class ReplayBuffer:
     def __init__(self):
-        self.rreplya_buffer_deque = deque(maxlen=20000)  # Initialize the buffer with a maximum length of 100000
+        self.rreplya_buffer_deque = deque(maxlen=18000)  # Initialize the buffer with a maximum length of 18000
 
     def add(self, state, action, reward, next_state, done):
-
-        #state = state.cpu().detach().numpy()  # Convert the state tensor to a numpy array
-        #next_state = next_state.cpu().detach().numpy()  # Convert the next state tensor to a numpy array
-        #action = action.cpu().detach().numpy()  # Convert the action tensor to a numpy array
-        #reward = reward.cpu().detach().numpy()  # Convert the reward tensor to a numpy array
-        #done = done.cpu().detach().numpy()  # Convert the done tensor to a numpy array
-
-
         self.rreplya_buffer_deque.append((state, action, reward, next_state, done))  # Add the transition to the buffer
 
     def sample(self, sample_batch_size):
@@ -169,12 +205,17 @@ batch_size = 32
 
 render_every = 50
 
-num_episodes = 600
+num_episodes = 50
 
 episode_durations = []
 
 # dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device)) 
 # dqn.train() 
+
+
+'''
+1-Episode begins 
+'''
 
 for i_episode in range(num_episodes):              # Initialize the episode
     
@@ -194,16 +235,20 @@ for i_episode in range(num_episodes):              # Initialize the episode
     while not done:                                  # Start training episode
 
         loops += 1
-        print(f"loops completed: {loops} and ", end="\r", flush=True)
+        print(f"loops completed: {loops} ", end="\r", flush=True)
         #deque length: {len(replay_buffer_list[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer_list[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB
         
-        state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device
+        state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device 
+        
 
+        '''
+        2-Perform and action from state and observe the next stat and reward .
+        '''
         q_actions = []
         
         # 1) Use the epsilon-greedy policy to select an action for each agent.
         for agent in range(2):
-            if random.random() < epsilon:                                    # Random action exploration
+            if random.random() < epsilon:                                   # Random action exploration
                 q_actions.append(np.random.randint(5))          
             else:
                 with torch.no_grad():                                        # Exploitation
@@ -216,20 +261,36 @@ for i_episode in range(num_episodes):              # Initialize the episode
         obs, reward, done, info = env.step(descreat_actions)                 # Step the environment, obs is of shape (num_agents, 96, 96, 3), reward is of shape (num_agents,)
         
         #process every 4th frame
-        if loops % buffer_skip == 0:
-            grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
-            buffer_append(grayscale_obs)
+        # if loops % buffer_skip == 0:
+        #     grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
+        #     buffer_append(grayscale_obs)
     
+        
+        next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
+
+        '''
+        3 compute the reward
+        '''
+
         total_reward += reward
 
-        next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)
+        '''
+        4-store in the replay buffer
+        '''
 
         # 2) Store the transition in the replay buffer.
         
         for agent in range(2):
             replay_buffer_list[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
             
-      
+        '''
+        5-next state is the new current state ,,,, happened at the start of the loop
+        '''
+
+
+        '''
+        6-run the batch training 
+        '''
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
         if len(replay_buffer_list[0].rreplya_buffer_deque) > batch_size:
             for agent in range(2):
@@ -240,17 +301,12 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
                 with torch.no_grad():
                     next_q_values = target_dqn(next_state)     # Get the Q-values for the next state
-                #target_q_values = q_values.clone()  # Clone the Q-values to calculate the target Q-values
+                target_q_values = q_values.clone()  # Clone the Q-values to calculate the target Q-values
                 
-                # for i in range(batch_size):
-                #     target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])     # Calculate the target Q-values using the Bellman equation
+                for i in range(batch_size):
+                    target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])     # Calculate the target Q-values using the Bellman equation
 
-                max_next_q, _ = torch.max(next_q_values, dim=1)  # shape: (batch_size,)
-                target_values = reward + gamma * max_next_q * (1 - r_done)  # shape: (batch_size,)
-
-                target_q_values = q_values.clone()
-                target_q_values.scatter_(1, action.unsqueeze(1), target_values.unsqueeze(1))
-
+                
 
                 loss = F.mse_loss(q_values, target_q_values)    # Calculate the loss using the mean squared error loss function   
                 
@@ -258,11 +314,18 @@ for i_episode in range(num_episodes):              # Initialize the episode
                 optimizer.zero_grad()   # Zero the gradients
                 loss.backward()         # Backpropagate the loss
                 optimizer.step()        # Update the DQN parameters
-
+    
+    
+    '''
     # end of episode  --------------------------------------------------------------------------------
+    '''
     epsilon = max(epsilon * epsilon_decay, epsilon_min)  # Decay the epsilon value
     torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
 
+
+    '''
+    # calculate the time needed to finish
+    '''
     episode_duration = time.perf_counter() - start_episode
     episode_durations.append(episode_duration)
     avg_duration = sum(episode_durations) / len(episode_durations)
@@ -277,6 +340,10 @@ for i_episode in range(num_episodes):              # Initialize the episode
         expected_str = f"{remaining_minutes:.2f} minutes"
 
 
+    '''
+    # end of episode report
+    '''
+
     print("individual scores:", total_reward)
     print("epsilon:", epsilon)
     #print("episode:", i_episode)
@@ -284,13 +351,18 @@ for i_episode in range(num_episodes):              # Initialize the episode
     print(f"Episode {i_episode} finished in {episode_duration:.2f} seconds. "
           f"Expected time to finish: {expected_str}.")
     print("------------------------------------------------------")
+    
+    '''
+    7-after N iteration, the weights of the prediction network get copied to Target Network
+    '''
+
 
     if i_episode % target_update_frequency == 0:  # Update the target network every 10 episodes
-        target_dqn.load_state_dict(dqn.state_dict())
+        target_dqn.load_state_dict(dqn.state_dict())     # Update the target network with the DQN weights
         print("Target network updated!")
         print("-----------------------###----------------------------")
 
-
+plot_conv_weights(dqn.conv1, title="DQN Conv1 Filters")
     
 #playsound('mixkit-bell-notification-933.wav')
 ########################## Step 6: Evaluate the DQN---------------------------------------------------------------------------------
@@ -318,7 +390,9 @@ if see.lower() == 'y':
             for agent in range(2):
                 q_values = dqn(state_tensor[agent].unsqueeze(0))
                 q_actions.append(torch.argmax(q_values).item())
-                print(f"Agent {agent} Q-values: {q_values.cpu().numpy()} selected action: {q_actions[agent]}")
+                #print(f"Agent {agent} Q-values: {q_values.cpu().numpy()} selected action: {q_actions[agent]}" , end="\r", flush=True)
+
+        print(f"Agent 1 selected action: {q_actions[0]} and agent 2 {q_actions[1]}" , end="\r", flush=True)
         
         discrete_actions = [deiscrete_action_space(a) for a in q_actions]
         obs, reward, done, info = env.step(discrete_actions)
@@ -326,9 +400,7 @@ if see.lower() == 'y':
         # Update the frame buffers with the new observation
         grayscale_obs = grayscale(obs)
         buffer_append(grayscale_obs)
-        
-        time.sleep(0.05)  # Add a small delay so that rendering is visible
-        
+                
 else:
     print("Ok, just watch")
     env.render()
@@ -338,17 +410,17 @@ else:
 
 
 
-
+file_name = "dqn_model_1200.pth"
 
 
 rspounce = input("Do you want to save the model? (y/n): ")
 if rspounce == 'y':
-    torch.save(dqn.state_dict(), "dqn_model_600+100.pth")
+    torch.save(dqn.state_dict(), file_name)
     print("Model saved successfully!")
 elif rspounce == 'n':
     print("Model not saved!")
 else:
-    torch.save(dqn.state_dict(), "dqn_model_600+100.pth")
+    torch.save(dqn.state_dict(), file_name)
     print("Model saved successfully! anyway lol")
 
 env.close()  # Close the environment after training

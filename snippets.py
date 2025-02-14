@@ -113,3 +113,22 @@ snapshot2 = tracemalloc.take_snapshot()
 top_stats = snapshot2.compare_to(snapshot1, 'lineno')
 for stat in top_stats[:10]:
     print(stat)
+
+
+'''
+Pseudocode for DQN[2]:
+
+    Episode begins.
+    Perform action a_t from state st and observe the next state s_t+1 and reward r. Initially, the action is randomly selected. Over time, the action from the prediction network is used based on epsilon-greedy policy. In epsilon-greedy policy, an action which has the highest Q value will be considered. In a typical neural network, prediction with the highest probability will be selected.
+    Compute the reward for the action.
+    Store the current state, action, reward, and next state in replay buffer. It enables the batch training in NN.
+    s_t+1 is the new state s_t and repeat steps 2 to 4 until the batch size reaches.
+    Run the batch training in NN of we reach the batch size. Please note the representation of the loss function different in the implementation. You can refer [3] for getting the understanding of the code.
+    After we reach N iteration, the weights of the prediction network get copied to Target Network.
+
+6. Episode ends.
+
+7. Repeat steps 1 to 6 until the optimal Q value is reached.
+'''
+
+loss_fn = nn.MSELoss()

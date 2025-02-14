@@ -41,7 +41,7 @@ class DQN(nn.Module):
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 dqn = DQN().to(device)
 # Load the model state dictionary (ensure the file "dqn_model.pth" exists)
-dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device))
+dqn.load_state_dict(torch.load("dqn_model_300.pth", map_location=device))
 dqn.eval()  # Set model to evaluation mode
 
 # -----------------------------
