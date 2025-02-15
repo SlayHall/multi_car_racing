@@ -196,7 +196,7 @@ target_update_frequency = 10    # Update the target network every 10 episodes
 
 
 epsilon = 1.0
-epsilon_decay = 0.995
+epsilon_decay = 0.997
 epsilon_min = 0.05
 
 aadam_learning_rate = 0.001
@@ -208,11 +208,11 @@ batch_size = 32
 
 render_every = 50
 
-num_episodes = 50
+num_episodes = 1200
 
 episode_durations = []
 
-save_file_as = "dqn_model_50.pth"
+save_file_as = "dqn_model_1200.pth"
 
 
 # dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device)) 
