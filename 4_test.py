@@ -78,6 +78,13 @@ def plot_conv_weights(conv_layer, title="Conv Layer Weights"):
     plt.tight_layout()
     plt.show()
 
+
+
+def normalize_reward(reward, min_reward = -100, max_reward = 100):
+        # Normalize to [0, 1]
+    normalized_reward = [(r - min_reward) / (max_reward - min_reward) for r in reward]
+    return normalized_reward
+
 ########################## Step 1: Initialize the environment --------------------------------------------
 
 # Initialize the environment----------------------------------------------------------------------------
@@ -104,7 +111,7 @@ def buffer_append(new_frame):
 
 def grayscale(frame):
     gray_obs = [cv2.cvtColor(frame[i], cv2.COLOR_RGB2GRAY) for i in range(env.num_agents)]
-    normalized_obs = [(gray_obs[i] / 255.0) * 2 - 1 for i in range(env.num_agents)]  # Range [-1, 1]
+    normalized_obs = [(gray_obs[i] / 255.0) for i in range(env.num_agents)]  # Range [-1, 1]
     return np.array(normalized_obs)    # shape(2, 96, 96)
 
 ########################### Step 3: Build the Deep Q-Network (DQN)------------------------------------------------------------
@@ -190,13 +197,13 @@ dqn_agents = [DQN().to(device), DQN().to(device)]
 target_dqns = [DQN().to(device), DQN().to(device)]
 for i in range(2):
     target_dqns[i].load_state_dict(dqn_agents[i].state_dict())  
-    target_dqns[i].eval()          # Set target network to evaluation mode
+    target_dqns[i].eval()  # Set the target network to evaluation mode
 
 target_update_frequency = 10    # Update the target network every 10 episodes
 
 
 epsilon = 1.0
-epsilon_decay = 0.997
+epsilon_decay = 0.995
 epsilon_min = 0.05
 
 aadam_learning_rate = 0.001
@@ -208,11 +215,11 @@ batch_size = 32
 
 render_every = 50
 
-num_episodes = 1200
+num_episodes = 100
 
 episode_durations = []
 
-save_file_as = "dqn_model_1200.pth"
+save_file_as = f"dqn_model_{num_episodes}_{epsilon_decay}_{aadam_learning_rate}_{batch_size}.pth"
 
 
 # dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device)) 
@@ -231,11 +238,18 @@ for i_episode in range(num_episodes):              # Initialize the episode
     done = False
     total_reward = 0
 
-    for agent in range(2):
-        frame_buffers[agent] = [np.zeros((96, 96)) for _ in range(buffer_size)]  # Initialize the buffer with zeros
 
     grayscale_obs = grayscale(obs)
     buffer_append(grayscale_obs)
+
+    # for agent in range(2):
+    #     frame_buffers[agent] = [np.zeros((96, 96)) for _ in range(buffer_size)]  # Initialize the buffer with zeros
+
+    for i in range(2):
+        for _ in range(buffer_size):
+            frame_buffers[i].append(grayscale_obs[i])  # Initialize the buffer with the first observed frame
+
+    
     loops = 0
 
     while not done:                                  # Start training episode
@@ -282,6 +296,8 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
         total_reward += reward
 
+        normal_reward = normalize_reward(reward)  # Normalize the reward to [-1, 1]
+
         '''
         4-next state is the new current state
         '''
@@ -298,7 +314,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
         # 2) Store the transition in the replay buffer.
         
         for agent in range(2):
-            replay_buffer_list[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], reward[agent], next_state_tensor[agent].detach().cpu(), done)
+            replay_buffer_list[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], normal_reward[agent], next_state_tensor[agent].detach().cpu(), done)
             
        
 
@@ -334,7 +350,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
                 
 
                 loss = F.mse_loss(q_values, target_q_values)    # Calculate the loss using the mean squared error loss function   
-                
+                #loss = F.smooth_l1_loss(q_values, target_q_values)  # Huber loss for more stable training
 
                 optimizers[agent].zero_grad()   # Zero the gradients
                 loss.backward()         # Backpropagate the loss
@@ -346,8 +362,13 @@ for i_episode in range(num_episodes):              # Initialize the episode
     '''
     # end of episode  --------------------------------------------------------------------------------
     '''
-    #torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
+    torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
     epsilon = max(epsilon * epsilon_decay, epsilon_min)
+
+    # if i_episode % render_every == 0:
+    #     env.render()
+
+
 
     '''
     # calculate the time needed to finish
@@ -386,7 +407,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
     if i_episode % target_update_frequency == 0:  # Update the target network every 10 episodes
         for agent in range(2):
             target_dqns[agent].load_state_dict(dqn_agents[agent].state_dict())        
-        print(f"Target network updated! 9Episode {i_episode}")
+        print(f"Target network updated! Episode {i_episode}")
         print("-----------------------###----------------------------")
 
 
