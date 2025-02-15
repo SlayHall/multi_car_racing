@@ -13,7 +13,7 @@ import sys
 import torch.optim as optim
 import matplotlib.pyplot as plt
 
-########################## helping code for memmory usage------------------------------------------------------------
+########################## helping code for debuging ------------------------------------------------------------
 class Timer:
     def __init__(self):
         self.start_time = None
@@ -35,50 +35,96 @@ class Timer:
 
 timer = Timer()
 
+'''--------------------------------------------------------------'''
+plt.ion()  # Enable interactive mode for matplotlib
 
-def plot_conv_weights(conv_layer, title="Conv Layer Weights"):
-    # Extract weight data from the convolutional layer.
-    # Weight tensor shape: (out_channels, in_channels, kernel_height, kernel_width)
+# # Initialize figures and axes for each agent
+# fig1, axes1 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 1
+# fig2, axes2 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 2
+# fig3, axes3 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 3
+# fig4, axes4 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 4
+
+
+# # Flatten the axes for easier indexing
+# axes1 = axes1.flatten()
+# axes2 = axes2.flatten()
+# axes3 = axes3.flatten()
+# axes4 = axes4.flatten()
+
+
+def update_conv_weights(conv_layer, axes, title):
     weights = conv_layer.weight.data.cpu().numpy()
-
-    # For visualization, if the filters have multiple channels, you can average them across channels.
     num_filters = weights.shape[0]
-    num_channels = weights.shape[1]
-    kernel_h, kernel_w = weights.shape[2], weights.shape[3]
-    
-    # Create a figure with subplots.
-    # You can adjust the number of columns per row as needed.
-    ncols = min(num_filters, 8)
-    nrows = (num_filters + ncols - 1) // ncols
-    fig, axes = plt.subplots(nrows, ncols, figsize=(ncols, nrows))
-    
-    # If there's only one row, wrap axes in a list for consistency.
-    if nrows == 1:
-        axes = [axes]
-    
+
+    # Clear previous content
+    for ax in axes:
+        ax.clear()
+
+    # Plot new weights
     for i in range(num_filters):
-        # Average across input channels to create a single 2D filter visualization.
         filter_weights = np.mean(weights[i, :, :, :], axis=0)
-        row = i // ncols
-        col = i % ncols
-        
-        ax = axes[row][col] if nrows > 1 else axes[col]
+        ax = axes[i]
         ax.imshow(filter_weights, cmap='gray')
         ax.set_title(f"Filter {i}")
         ax.axis('off')
-    
-    # Hide any unused subplots
-    for j in range(i+1, nrows * ncols):
-        row = j // ncols
-        col = j % ncols
-        ax = axes[row][col] if nrows > 1 else axes[col]
-        ax.axis('off')
-    
+
+    # Hide unused subplots
+    for j in range(num_filters, len(axes)):
+        axes[j].axis('off')
+
+    # Update the figure title
     plt.suptitle(title)
     plt.tight_layout()
-    plt.show()
+    plt.draw()  # Update the plot without blocking
+    plt.pause(0.01)  # Allow time for the plot to update
+
+'''#--------------------------------------------------------------
+'''
+# Initialize a single figure with subplots for all 4 layers of the first agent
+fig, axes = plt.subplots(4, 8, figsize=(16, 8))  # 4 rows (one for each layer), 8 columns (for filters)
+fig.suptitle("Agent 0 Conv Layers Weights", fontsize=16)
+
+# Flatten the axes for easier indexing
+axes = axes.flatten()
+
+def update_all_conv_weights(agent, axes):
+    layers = [agent.conv1, agent.conv2, agent.conv3, agent.conv4]  # List of all convolutional layers
+    layer_names = ["Conv1", "Conv2", "Conv3", "Conv4"]  # Names of the layers
+
+    # Clear previous content
+    for ax in axes:
+        ax.clear()
+
+    # Plot weights for each layer
+    for layer_idx, (layer, name) in enumerate(zip(layers, layer_names)):
+        weights = layer.weight.data.cpu().numpy()
+        num_filters = weights.shape[0]
+
+        # Plot filters for the current layer
+        for filter_idx in range(min(num_filters, 8)):  # Show up to 8 filters per layer
+            filter_weights = np.mean(weights[filter_idx, :, :, :], axis=0)  # Average across input channels
+            ax = axes[layer_idx * 8 + filter_idx]  # Calculate the subplot index
+            ax.imshow(filter_weights, cmap='gray')
+            ax.set_title(f"{name} Filter {filter_idx}")
+            ax.axis('off')
+
+        # Hide unused subplots for the current layer
+        for filter_idx in range(num_filters, 8):
+            ax = axes[layer_idx * 8 + filter_idx]
+            ax.axis('off')
+
+    # Update the figure
+    plt.tight_layout()
+    plt.draw()  # Update the plot without blocking
+    plt.pause(0.01)  # Allow time for the plot to update
+
+'''--------------------------------------------------------------'''
+##### 
 
 
+
+
+'''--------------------------------------------------------------'''
 
 def normalize_reward(reward, min_reward = -100, max_reward = 100):
         # Normalize to [0, 1]
@@ -126,6 +172,7 @@ def deiscrete_action_space(action):
     }
     return switch_dict.get(action, "Invalid action not (0-4)")
 
+'''
 class DQN(nn.Module):
     def __init__(self, input_shape=(4, 96, 96), num_actions=5):
         super(DQN, self).__init__()
@@ -145,6 +192,50 @@ class DQN(nn.Module):
         x = F.relu(self.fc1(x))       # Pass through the fully connected layer
         x = self.fc2(x)               # Output the Q-values for each action
         return x
+'''
+
+class DQN(nn.Module):
+    def __init__(self, input_shape=(4, 96, 96), num_actions=5):
+        super(DQN, self).__init__()
+        self.conv1 = nn.Conv2d(in_channels=input_shape[0], out_channels=32, kernel_size=5, stride=1, padding=2)
+        self.bn1 = nn.BatchNorm2d(32)
+        self.pool1 = nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample to (32, 48, 48)
+        
+        self.conv2 = nn.Conv2d(in_channels=32, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.bn2 = nn.BatchNorm2d(64)
+        self.pool2 = nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample to (64, 24, 24)
+        
+        self.conv3 = nn.Conv2d(in_channels=64, out_channels=64, kernel_size=3, stride=1, padding=1)
+        self.bn3 = nn.BatchNorm2d(64)
+        self.pool3 = nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample to (64, 12, 12)
+        
+        self.conv4 = nn.Conv2d(in_channels=64, out_channels=128, kernel_size=3, stride=1, padding=1)
+        self.bn4 = nn.BatchNorm2d(128)
+        self.pool4 = nn.MaxPool2d(kernel_size=2, stride=2)  # Downsample to (128, 6, 6)
+        
+        self.fc1 = nn.Linear(128 * 6 * 6, 512)
+        self.dropout = nn.Dropout(0.5)
+        self.fc2 = nn.Linear(512, num_actions)
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = self.pool1(x)
+        
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = self.pool2(x)
+        
+        x = F.relu(self.bn3(self.conv3(x)))
+        x = self.pool3(x)
+        
+        x = F.relu(self.bn4(self.conv4(x)))
+        x = self.pool4(x)
+        
+        x = x.view(x.size(0), -1)  # Flatten
+        x = F.relu(self.fc1(x))
+        x = self.dropout(x)
+        x = self.fc2(x)
+        return x
+
 
 # select computing device and number of episodes-----------------------------------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -199,14 +290,28 @@ for i in range(2):
     target_dqns[i].load_state_dict(dqn_agents[i].state_dict())  
     target_dqns[i].eval()  # Set the target network to evaluation mode
 
-target_update_frequency = 10    # Update the target network every 10 episodes
+'''------------------------------------ debuging gradiants---------------------------------------------'''
+# Initialize a dictionary to store gradients
+gradients = {name: [] for name, _ in dqn_agents[0].named_parameters()}
 
+# Initialize the plot
+fig, ax = plt.subplots(figsize=(12, 8))
+lines = {name: ax.plot([], [], label=name)[0] for name in gradients.keys()}
+ax.set_xlabel("Training Step")
+ax.set_ylabel("Gradient Norm")
+ax.set_title("Gradient Norm Over Time")
+ax.legend()
+'''---------------------------------------------------------------------------------'''
+
+
+## hyper parameters ---------------------------------------------------------
+target_update_frequency = 10    # Update the target network every 10 episodes
 
 epsilon = 1.0
 epsilon_decay = 0.995
 epsilon_min = 0.05
 
-aadam_learning_rate = 0.001
+aadam_learning_rate = 0.0001
 optimizers = [torch.optim.Adam(dqn_agents[i].parameters(), lr=aadam_learning_rate) for i in range(2)]
 
 gamma = 0.99
@@ -221,7 +326,7 @@ episode_durations = []
 
 save_file_as = f"dqn_model_{num_episodes}_{epsilon_decay}_{aadam_learning_rate}_{batch_size}.pth"
 
-
+wight_ploting_frq = 1
 # dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device)) 
 # dqn.train() 
 
@@ -355,7 +460,19 @@ for i_episode in range(num_episodes):              # Initialize the episode
                 optimizers[agent].zero_grad()   # Zero the gradients
                 loss.backward()         # Backpropagate the loss
                 torch.nn.utils.clip_grad_norm_(dqn_agents[agent].parameters(), max_norm=1.0)
+                
+                
+                # Compute and store gradient norms
+                for name, param in dqn_agents[agent].named_parameters():
+                    if param.grad is not None:
+                        grad_norm = param.grad.norm().item()  # Compute the norm of the gradient
+                        gradients[name].append(grad_norm)     # Store the gradient norm
+
+
                 optimizers[agent].step()        # Update the DQN parameters
+
+
+                
 
         loops += 1
    
@@ -364,6 +481,28 @@ for i_episode in range(num_episodes):              # Initialize the episode
     '''
     torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
     epsilon = max(epsilon * epsilon_decay, epsilon_min)
+
+
+    # Visualize weights at the specified frequency
+    if i_episode % wight_ploting_frq == 0:
+        update_all_conv_weights(dqn_agents[0], axes)  # Update weights for the first agent only
+    
+    
+# Update the plot at the end of each episode
+    for name, line in lines.items():
+        line.set_xdata(range(len(gradients[name])))  # Update x-axis data
+        line.set_ydata(gradients[name])  # Update y-axis data
+
+    # Rescale and redraw the plot
+    ax.relim()
+    ax.autoscale_view()
+    plt.draw()
+    plt.pause(0.01)  # Allow time for the plot to update
+
+    # Clear the gradient storage for the next episode
+    for name in gradients.keys():
+        gradients[name].clear()
+
 
     # if i_episode % render_every == 0:
     #     env.render()
