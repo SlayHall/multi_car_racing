@@ -13,7 +13,13 @@ import sys
 import torch.optim as optim
 import matplotlib.pyplot as plt
 
-########################## helping code for debuging ------------------------------------------------------------
+
+
+
+
+########################## helping code for debuging ------------------------------------------------------------###
+
+'''-------------------------time calculating class---------------------------------------------------------------'''
 class Timer:
     def __init__(self):
         self.start_time = None
@@ -33,114 +39,52 @@ class Timer:
         print(f"{message}:  {elapsed_time:.6f} seconds")
         return elapsed_time
 
-timer = Timer()
+timer = Timer()    # Create a timer object
 
-'''--------------------------------------------------------------'''
+
+'''---------------------------------wights visulization--------------------------------------------------------'''
 plt.ion()  # Enable interactive mode for matplotlib
 
-# # Initialize figures and axes for each agent
-# fig1, axes1 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 1
-# fig2, axes2 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 2
-# fig3, axes3 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 3
-# fig4, axes4 = plt.subplots(4, 8, figsize=(16, 8))  # Agent 4
-
-
-# # Flatten the axes for easier indexing
-# axes1 = axes1.flatten()
-# axes2 = axes2.flatten()
-# axes3 = axes3.flatten()
-# axes4 = axes4.flatten()
-
-
-def update_conv_weights(conv_layer, axes, title):
-    weights = conv_layer.weight.data.cpu().numpy()
-    num_filters = weights.shape[0]
-
-    # Clear previous content
-    for ax in axes:
-        ax.clear()
-
-    # Plot new weights
-    for i in range(num_filters):
-        filter_weights = np.mean(weights[i, :, :, :], axis=0)
-        ax = axes[i]
-        ax.imshow(filter_weights, cmap='gray')
-        ax.set_title(f"Filter {i}")
-        ax.axis('off')
-
-    # Hide unused subplots
-    for j in range(num_filters, len(axes)):
-        axes[j].axis('off')
-
-    # Update the figure title
-    plt.suptitle(title)
-    plt.tight_layout()
-    plt.draw()  # Update the plot without blocking
-    plt.pause(0.01)  # Allow time for the plot to update
-
-'''#--------------------------------------------------------------
-'''
-# # Initialize a single figure with subplots for all 4 layers of the first agent
-# fig, axes = plt.subplots(4, 8, figsize=(16, 8))  # 4 rows (one for each layer), 8 columns (for filters)
-# fig.suptitle("Agent 0 Conv Layers Weights", fontsize=16)
-
-# # Flatten the axes for easier indexing
-# axes = axes.flatten()
-
 def update_all_conv_weights(agent, axes):
-    layers = [agent.conv1, agent.conv2, agent.conv3, agent.conv4]  # List of all convolutional layers
-    layer_names = ["Conv1", "Conv2", "Conv3", "Conv4"]  # Names of the layers
+    layers = [agent.conv1, agent.conv2, agent.conv3, agent.conv4]          # List of all convolutional layers
+    layer_names = ["Conv1", "Conv2", "Conv3", "Conv4"]                     # Names of the layers
 
-    # Clear previous content
-    for ax in axes:
+    for ax in axes:                                                        # Clear previous contents of the axes
         ax.clear()
 
-    # Plot weights for each layer
-    for layer_idx, (layer, name) in enumerate(zip(layers, layer_names)):
+    for layer_idx, (layer, name) in enumerate(zip(layers, layer_names)):   # Plot weights for each layer
         weights = layer.weight.data.cpu().numpy()
         num_filters = weights.shape[0]
 
-        # Plot filters for the current layer
-        for filter_idx in range(min(num_filters, 8)):  # Show up to 8 filters per layer
-            filter_weights = np.mean(weights[filter_idx, :, :, :], axis=0)  # Average across input channels
-            ax = axes[layer_idx * 8 + filter_idx]  # Calculate the subplot index
+        #                                                                  # Plot filters for the current layer
+        for filter_idx in range(min(num_filters, 8)):                      # Show up to 8 filters per layer
+            filter_weights = np.mean(weights[filter_idx, :, :, :], axis=0) # Average across input channels
+            ax = axes[layer_idx * 8 + filter_idx]                          # Calculate the subplot index
             ax.imshow(filter_weights, cmap='gray')
             ax.set_title(f"{name} Filter {filter_idx}")
             ax.axis('off')
 
-        # Hide unused subplots for the current layer
-        for filter_idx in range(num_filters, 8):
+        for filter_idx in range(num_filters, 8):                           # Hide unused subplots for the current layer
             ax = axes[layer_idx * 8 + filter_idx]
             ax.axis('off')
 
     # Update the figure
     plt.tight_layout()
-    plt.draw()  # Update the plot without blocking
-    plt.pause(0.01)  # Allow time for the plot to update
-
-'''--------------------------------------------------------------'''
-##### 
+    plt.draw()          # Update the plot without blocking
+    plt.pause(0.01)     # Allow time for the plot to update
 
 
 
+########################## Step 1: Initialize the environment -----------------------------------###
 
-'''--------------------------------------------------------------'''
-
-def normalize_reward(reward, min_reward = -100, max_reward = 100):
-        # Normalize to [0, 1]
-    normalized_reward = [(r - min_reward) / (max_reward - min_reward) for r in reward]
-    return normalized_reward
-
-########################## Step 1: Initialize the environment --------------------------------------------
-
-# Initialize the environment----------------------------------------------------------------------------
 env = gym.make("MultiCarRacing-v0", num_agents=2, direction='CCW',
                use_random_direction=True, backwards_flag=True, h_ratio=0.25,
                use_ego_color=False)
 
-########################## Step 2 Preprocess Observations (Grayscale)------------------------------------------------------------
 
-# Create lists for storing frames for each agent--------------------------------------------------------------------------------
+########################## Step 2 Preprocess Observations (Grayscale)----------------------------###
+
+'''------------------------Create lists for storing frames for each agent------------------------'''
 frame_buffers = [[], []]  # Two agents, so two lists  shape(2, 4, 96, 96)
 buffer_size = 4           # Number of frames to stack
 buffer_skip = 4           # Number of steps to skip for faster processing
@@ -149,19 +93,28 @@ for i in range(2):
     for _ in range(4):
         frame_buffers[i].append(np.zeros((96, 96)))  # Initialize the buffer with zeros
 
+
 def buffer_append(new_frame):
     for i in range(2):
         frame_buffers[i].append(new_frame[i])  # Store the respective agent's frame
         if len(frame_buffers[i]) > buffer_size:
             frame_buffers[i].pop(0)
 
+'''------------------------Convert RGB to Grayscale and Normalize---------------------------------'''
 def grayscale(frame):
     gray_obs = [cv2.cvtColor(frame[i], cv2.COLOR_RGB2GRAY) for i in range(env.num_agents)]
-    normalized_obs = [(gray_obs[i] / 255.0) for i in range(env.num_agents)]  # Range [-1, 1]
-    return np.array(normalized_obs)    # shape(2, 96, 96)
+    normalized_obs = [(gray_obs[i] / 255.0) for i in range(env.num_agents)]  # Range [0, 1]
+    return np.array(normalized_obs)                                          # shape(2, 96, 96)
 
-########################### Step 3: Build the Deep Q-Network (DQN)------------------------------------------------------------
+'''------------------------Normalize the reward---------------------------------------------------'''
+def normalize_reward(reward, min_reward = -100, max_reward = 100):           # Normalize to [0, 1]   
+    normalized_reward = [(r - min_reward) / (max_reward - min_reward) for r in reward]
+    return normalized_reward
 
+
+########################### Step 3: Build the Deep Q-Network (DQN)--------------------------------------------------------------------###
+
+'''------------------------Define the Discrete Action Space function------------------------------------------------------------------'''
 def deiscrete_action_space(action):
     switch_dict = {    # *Discrete*    *Q-values*
         0: [-1, 0, 0],    # Left            1.2    
@@ -170,9 +123,10 @@ def deiscrete_action_space(action):
         3: [0, 0, 1],     # Brake           2.1
         4: [0, 0, 0]      # Do nothing      0.3
     }
-    return switch_dict.get(action, "Invalid action not (0-4)")
+    return switch_dict.get(action, "Invalid action not (0-4)")  # Return the action from the dictionary or an error message just in case
 
 
+'''------------------------Define the DQN model---------------------------------------------------------------------------------------'''
 class DQN(nn.Module):
     def __init__(self, input_shape=(4, 96, 96), num_actions=5):
         super(DQN, self).__init__()
@@ -194,6 +148,7 @@ class DQN(nn.Module):
         return x
 
 
+'''------------------------Define the Enhanced DQN model---------enhanced model but twice as slow as the above model------------------'''
 # class DQN(nn.Module):              # enhanced model but twice as slow as the above model
 #     def __init__(self, input_shape=(4, 96, 96), num_actions=5):
 #         super(DQN, self).__init__()
@@ -237,10 +192,49 @@ class DQN(nn.Module):
 #         x = self.fc2(x)
 #         return x
 
+'''------------------------Convert the frame buffers to a tensor--------so the input of the DQN becomes a tensor---------------------'''
+
+def Convert_Frame_Buffer_to_Tensor(frame_buffers):
+    stacked_frames = [ ]
+    for i in range(2):
+        frames = frame_buffers[i][-buffer_size:]                # Get the last 4 frames for each agent
+        stacked_frames.append(np.stack(frames, axis=0))         # Stack them along a new dimension stacked frames (4, 96, 96)
+    stacked_frames = np.array(stacked_frames)                   # Convert the list of arrays into a single numpy array  
+    return torch.from_numpy(stacked_frames).float().to(device)  # More efficient conversion
+    return torch.tensor(stacked_frames, dtype=torch.float32)    # Convert the stacked frames to a tensor (not used in this implementation)
 
 
+########################### Step 4: Implement the Replay Buffer------------------------------------------------------------###
 
-# select computing device and number of episodes-----------------------------------------------------------
+'''--------------------1) Create a ReplayBuffer class----------------------------------------------------------------------'''
+class ReplayBuffer:
+    def __init__(self):
+        self.rreplya_buffer_deque = deque(maxlen=18000)  # Initialize the buffer with a maximum length of 18000 
+
+    def add(self, state, action, reward, next_state, done):
+        self.rreplya_buffer_deque.append((state, action, reward, next_state, done))   # Add the transition to the buffer
+
+    def sample(self, sample_batch_size):
+        sample = random.sample(self.rreplya_buffer_deque, sample_batch_size)          # Sample a batch of transitions without replacements, they are tuples that must be unpacked
+        state, action, reward, next_state, done = map(list, zip(*sample))             # Unpack the batch of transitions
+        
+        '''--Convert the batch of transitions to tensors--'''
+        state = torch.stack(state).to(device)
+        action = torch.tensor(action, dtype=torch.int64).to(device)
+        reward = torch.tensor(reward, dtype=torch.float32).to(device)
+        next_state = torch.stack(next_state).to(device)
+        done = torch.tensor(done, dtype=torch.float32).to(device)
+        
+        return state, action, reward, next_state, done
+
+'''---------2) Initialize a separate replay buffer for each agent-----------------------------------------------------------'''
+replay_buffer_list = [ReplayBuffer(), ReplayBuffer()]  # Initialize the replay buffer for 2 agents  
+
+
+########################## Step 5: Train the DQN----------------------------------------------------------###
+
+
+'''-------------select computing device and number of episodes--------------------------------------------'''
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available() or torch.backends.mps.is_available():
     num_episodes = 600
@@ -248,72 +242,36 @@ else:
     num_episodes = 50
 
 
-def Convert_Frame_Buffer_to_Tensor(frame_buffers):
-    stacked_frames = [ ]
-    for i in range(2):
-        frames = frame_buffers[i][-buffer_size:]                # Get the last 4 frames for each agent
-        stacked_frames.append(np.stack(frames, axis=0))      # Stack them along a new dimension stacked frames (4, 96, 96)
-    stacked_frames = np.array(stacked_frames)                   # Convert the list of arrays into a single numpy array  
-    return torch.from_numpy(stacked_frames).float().to(device)            # More efficient conversion
-    return torch.tensor(stacked_frames, dtype=torch.float32)    # Convert the stacked frames to a tensor
-
-########################### Step 4: Implement the Replay Buffer------------------------------------------------------------
-
-# 1) Create a ReplayBuffer class.
-class ReplayBuffer:
-    def __init__(self):
-        self.rreplya_buffer_deque = deque(maxlen=18000)  # Initialize the buffer with a maximum length of 18000
-
-    def add(self, state, action, reward, next_state, done):
-        self.rreplya_buffer_deque.append((state, action, reward, next_state, done))  # Add the transition to the buffer
-
-    def sample(self, sample_batch_size):
-        sample = random.sample(self.rreplya_buffer_deque, sample_batch_size)          # Sample a batch of transitions without replacements, they are tuples that must be unpacked
-        state, action, reward, next_state, done = map(list, zip(*sample))      # Unpack the batch of transitions
-        
-        ## Convert the batch of transitions to tensors--------------------------------
-        state = torch.stack(state).to(device)
-        action = torch.tensor(action, dtype=torch.int64).to(device)
-        reward = torch.tensor(reward, dtype=torch.float32).to(device)
-        next_state = torch.stack(next_state).to(device)
-        done = torch.tensor(done, dtype=torch.float32).to(device)
-        
-
-        return state, action, reward, next_state, done
-
-# 2) Initialize a separate replay buffer for each agent.
-replay_buffer_list = [ReplayBuffer(), ReplayBuffer()]  # Initialize the replay buffer for 2 agents  
-
-########################## Step 5: Train the DQN---------------------------------------------------------------------------------
-
-# Initialize DQN models for each agent
+'''--------------Initialize DQN models for each agent------------------------------------------------------'''
 dqn_agents = [DQN().to(device), DQN().to(device)]
 target_dqns = [DQN().to(device), DQN().to(device)]
+
 for i in range(2):
     target_dqns[i].load_state_dict(dqn_agents[i].state_dict())  
     target_dqns[i].eval()  # Set the target network to evaluation mode
 
-'''------------------------------------ debuging gradiants---------------------------------------------'''
-# Initialize a dictionary to store gradient norms
-#gradient_norms = {name: [] for name, _ in dqn_agents[0].named_parameters()}
 
-# # Initialize the plot for gradient norms
-# fig, ax = plt.subplots(figsize=(12, 8))
-# ax.set_xlabel("Training Step")
-# ax.set_ylabel("Gradient Norm")
-# ax.set_title("Gradient Norm Over Time")
-# lines = {name: ax.plot([], [], label=name)[0] for name in gradient_norms.keys()}
-# ax.legend()
+'''------------------------------ debuging gradiants-------------------------------------------------------'''
+gradient_norms = {name: [] for name, _ in dqn_agents[0].named_parameters()}   #Initialize a dictionary to store gradient norms
 
-# # Initialize the plot for gradient histograms
-# fig, axes = plt.subplots(2, 2, figsize=(12, 8))  # Adjust subplot layout as needed
-# axes = axes.flatten()
-# plt.suptitle("Gradient Histograms")
-
-'''---------------------------------------------------------------------------------'''
+fig, ax = plt.subplots(figsize=(12, 8))                                       # Initialize the plot for gradient norms
+ax.set_xlabel("Training Step")
+ax.set_ylabel("Gradient Norm")
+ax.set_title("Gradient Norm Over Time")
+lines = {name: ax.plot([], [], label=name)[0] for name in gradient_norms.keys()}
+ax.legend()
 
 
-## hyper parameters ---------------------------------------------------------
+'''------------------------------- wights visualization----------------------------------------------------'''
+# fig, axes = plt.subplots(4, 8, figsize=(16, 8))  # Initialize a single figure with subplots for all 4 layers of the first agent 4 rows (one for each layer), 8 columns (for filters)
+# fig.suptitle("Agent 0 Conv Layers Weights", fontsize=16)
+
+# axes = axes.flatten()                            # Flatten the axes for easier indexing
+
+
+
+
+'''--------------------------------hyper parameters -------------------------------------------------------'''
 target_update_frequency = 10    # Update the target network every 10 episodes
 
 epsilon = 1.0
@@ -321,7 +279,7 @@ epsilon_decay = 0.996
 epsilon_min = 0.05
 
 aadam_learning_rate = 0.0001
-optimizers = [torch.optim.Adam(dqn_agents[i].parameters(), lr=aadam_learning_rate) for i in range(2)]
+optimizers = [torch.optim.Adam(dqn_agents[i].parameters(), lr=aadam_learning_rate) for i in range(2)]  # Initialize the Adam optimizer for each agent
 
 gamma = 0.99
 
@@ -329,17 +287,15 @@ batch_size = 32
 
 render_every = 50
 
-num_episodes = 1000
-
 episode_durations = []
 
 save_file_as = f"dqn_model_{num_episodes}_{epsilon_decay}_{aadam_learning_rate}_{batch_size}.pth"
 
-wight_ploting_frq = 1
 # dqn.load_state_dict(torch.load("dqn_model_600.pth", map_location=device)) 
 # dqn.train() 
 
 
+''''---------------------------------Training Loop-------------------------------------------------------'''
 '''
 1-Episode begins 
 '''
@@ -361,7 +317,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
 
     for i in range(2):
         for _ in range(buffer_size):
-            frame_buffers[i].append(grayscale_obs[i])  # Initialize the buffer with the first observed frame
+            frame_buffers[i].append(grayscale_obs[i])# Initialize the buffer with the first observed frame
 
     
     loops = 0
@@ -371,16 +327,13 @@ for i_episode in range(num_episodes):              # Initialize the episode
         print(f"loops completed: {loops} ", end="\r", flush=True)
         #deque length: {len(replay_buffer_list[agent].rreplya_buffer_deque)} of size {sys.getsizeof(replay_buffer_list[agent].rreplya_buffer_deque)/(1024*1024)} MB and torch memory: {(torch.cuda.memory_allocated()/(1024*1024))} MB
         
-        #process every 4th frame
-        if loops % buffer_skip == 0:
-            grayscale_obs = grayscale(obs)               # Process the observation and fill the buffers
+        if loops % buffer_skip == 0:                 # process every 4th frame
+            grayscale_obs = grayscale(obs)           # Process the observation and fill the buffers
             buffer_append(grayscale_obs)
         
         state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device 
 
             
-
-
         '''
         2-Perform and action from state and observe the next stat and reward .
         '''
@@ -388,7 +341,7 @@ for i_episode in range(num_episodes):              # Initialize the episode
         
         # 1) Use the epsilon-greedy policy to select an action for each agent.
         for agent in range(2):
-            if random.random() < epsilon:                                   # Random action exploration
+            if random.random() < epsilon:                                    # Random action exploration
                 q_actions.append(np.random.randint(5))          
             else:
                 with torch.no_grad():                                        # Exploitation
@@ -397,20 +350,14 @@ for i_episode in range(num_episodes):              # Initialize the episode
         
         descreat_actions = [deiscrete_action_space(a) for a in q_actions]    # Convert the action to the discrete action space
 
-
         obs, reward, done, info = env.step(descreat_actions)                 # Step the environment, obs is of shape (num_agents, 96, 96, 3), reward is of shape (num_agents,)
         
         
-    
-        
-
         '''
         3 compute the reward
         '''
-
         total_reward += reward
-
-        normal_reward = normalize_reward(reward)  # Normalize the reward to [-1, 1]
+        normal_reward = normalize_reward(reward)     # Normalize the reward to [-1, 1]
 
         '''
         4-next state is the new current state
@@ -420,114 +367,94 @@ for i_episode in range(num_episodes):              # Initialize the episode
         next_state_tensor = Convert_Frame_Buffer_to_Tensor(frame_buffers).to(device)  # shape(1, 2, 4, 96, 96) 1 batch, 2 agents, 4 frames, 96x96 pixels move to device 
 
 
-
         '''
         5-store in the replay buffer
         '''
-
         # 2) Store the transition in the replay buffer.
-        
         for agent in range(2):
             replay_buffer_list[agent].add(state_tensor[agent].detach().cpu(), q_actions[agent], normal_reward[agent], next_state_tensor[agent].detach().cpu(), done)
             
-       
 
         '''
         6-run the batch training 
         '''
         # 3) Sample a batch of transitions from the replay buffer and calculate the loss.
-
-        
         for agent in range(2):
             if len(replay_buffer_list[agent].rreplya_buffer_deque) > batch_size:
-            
                 state, action, reward, next_state, r_done = replay_buffer_list[agent].sample(batch_size)
-                
+
                 '''
                 Compute Q-values for current state
                 '''
+                q_values = dqn_agents[agent](state)                # Get the Q-values for the current state
                 
-                q_values = dqn_agents[agent](state)               # Get the Q-values for the current state
-                
+
                 '''
                 Compute target Q-values
                 '''
                 with torch.no_grad():
-                    next_q_values = target_dqns[agent](next_state)     # Get the Q-values for the next state
+                    next_q_values = target_dqns[agent](next_state) # Get the Q-values for the next state
 
 
-                target_q_values = q_values.clone()  # Clone the Q-values to calculate the target Q-values
+                target_q_values = q_values.clone()                 # Clone the Q-values to calculate the target Q-values
                 
                 for i in range(batch_size):
                     target_q_values[i, action[i]] = reward[i] + gamma * torch.max(next_q_values[i]) * (1 - r_done[i])     # Calculate the target Q-values using the Bellman equation
 
                 
-
-                loss = F.mse_loss(q_values, target_q_values)    # Calculate the loss using the mean squared error loss function   
-                #loss = F.smooth_l1_loss(q_values, target_q_values)  # Huber loss for more stable training
+                '''
+                compute the loss
+                '''
+                loss = F.mse_loss(q_values, target_q_values)         # Calculate the loss using the mean squared error loss function   
+                #loss = F.smooth_l1_loss(q_values, target_q_values)  # Huber loss for more stable training (not used in this implementation)
 
                 optimizers[agent].zero_grad()   # Zero the gradients
-                loss.backward()         # Backpropagate the loss
-                torch.nn.utils.clip_grad_norm_(dqn_agents[agent].parameters(), max_norm=1.0)
+                loss.backward()                 # Backpropagate the loss
+                torch.nn.utils.clip_grad_norm_(dqn_agents[agent].parameters(), max_norm=1.0)  # Clip the gradients to prevent exploding gradients(not needed for now sense gradients are vanishing)
                 
-                
-                # # Collect gradient norms (only for key layers)
+                '''--debuging the gradiant----collect gradient norms (only for key layers) to plot them--'''
                 # for name, param in dqn_agents[agent].named_parameters():
                 #     if param.grad is not None and "conv1" in name or "conv4" in name or "fc1" in name or "fc2" in name:
-                #         grad_norm = param.grad.norm().item()  # Compute the norm of the gradient
+                #         grad_norm = param.grad.norm().item()   # Compute the norm of the gradient
                 #         gradient_norms[name].append(grad_norm)
 
-
-                optimizers[agent].step()        # Update the DQN parameters
-
-
-                
+                optimizers[agent].step()         # Update the DQN parameters
 
         loops += 1
    
     '''
-    # end of episode  --------------------------------------------------------------------------------
+    ### end of episode  -------------------------------------------------------------------------------------###
     '''
-    torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
-    epsilon = max(epsilon * epsilon_decay, epsilon_min)
+    torch.cuda.empty_cache()                               # Clear the cache to prevent memory leaks
+    epsilon = max(epsilon * epsilon_decay, epsilon_min)    # Decay the epsilon value
 
-    '''-------------------plots--------------------------------'''
-    # # Visualize weights at the specified frequency
-    # if i_episode % wight_ploting_frq == 0:
-    #     update_all_conv_weights(dqn_agents[0], axes)  # Update weights for the first agent only
+
+    '''------------------------------------plots for debuging----------------------------------------------'''
+    
+    '''--Visualize weights at the end of each episode--'''
+    #update_all_conv_weights(dqn_agents[0], axes)  # Update weights for the first agent only
     
     
-# # Update the plot at the end of each episode
-#     for name, line in lines.items():
-#         line.set_xdata(range(len(gradients[name])))  # Update x-axis data
-#         line.set_ydata(gradients[name])  # Update y-axis data
 
-#     # Rescale and redraw the plot
-#     ax.relim()
-#     ax.autoscale_view()
-#     plt.draw()
-#     plt.pause(0.01)  # Allow time for the plot to update
+    '''--Plot gradient norms at the end of each episode--'''
+    # if i_episode % 1 == 0:  # Plot every episode (adjust frequency as needed)
+    #     for name, line in lines.items():
+    #         if name in gradient_norms:  # Only update lines for layers we're tracking
+    #             line.set_xdata(range(len(gradient_norms[name])))
+    #             line.set_ydata(gradient_norms[name])
+    #     ax.relim()
+    #     ax.autoscale_view()
+    #     plt.draw()
+    #     plt.pause(0.01)  # Allow time for the plot to update
 
-
-# # Plot gradient norms at the end of each episode
-#     if i_episode % 1 == 0:  # Plot every episode (adjust frequency as needed)
-#         for name, line in lines.items():
-#             if name in gradient_norms:  # Only update lines for layers we're tracking
-#                 line.set_xdata(range(len(gradient_norms[name])))
-#                 line.set_ydata(gradient_norms[name])
-#         ax.relim()
-#         ax.autoscale_view()
-#         plt.draw()
-#         plt.pause(0.01)  # Allow time for the plot to update
-
-#     # Clear the gradient storage for the next episode
-#     for name in gradient_norms.keys():
-#         gradient_norms[name].clear()
+    # # Clear the gradient storage for the next episode
+    # for name in gradient_norms.keys():
+    #     gradient_norms[name].clear()
+    '''----------------------------------------------------------------------------------------------------'''
 
 
     # if i_episode % render_every == 0:
     #     env.render()
-
 
 
     '''
@@ -550,7 +477,6 @@ for i_episode in range(num_episodes):              # Initialize the episode
     '''
     # end of episode report
     '''
-
     print("individual scores:", total_reward)
     print("epsilon:", epsilon)
     #print("episode:", i_episode)
@@ -559,11 +485,10 @@ for i_episode in range(num_episodes):              # Initialize the episode
           f"Expected time to finish: {expected_str}.")
     print("------------------------------------------------------")
     
+
     '''
     7-after N iteration, the weights of the prediction network get copied to Target Network
     '''
-
-
     if i_episode % target_update_frequency == 0:  # Update the target network every 10 episodes
         for agent in range(2):
             target_dqns[agent].load_state_dict(dqn_agents[agent].state_dict())        
@@ -571,13 +496,16 @@ for i_episode in range(num_episodes):              # Initialize the episode
         print("-----------------------###----------------------------")
 
 
-# Plot the weights of the first convolutional layer
-##plot_conv_weights(dqn.conv1, title="DQN Conv1 Filters")
-    
-########################## Step 6: Evaluate the DQN---------------------------------------------------------------------------------
+
+########################## Step 7: Evaluate the DQN-------------------------------------------------------------------------------###
 print("Training complete!")
+
+
+'''------------------------Render the environment---------------------------------------------------------------------------------'''
 see = input("Do you wanna render the environment? (y/n): ")
-if see.lower() == 'y':
+if see.lower() == 'n':
+    print("as you wish!")
+else:
     # Optionally, set the model to evaluation mode.
     for agent in dqn_agents:
         agent.eval()
@@ -611,24 +539,18 @@ if see.lower() == 'y':
         grayscale_obs = grayscale(obs)
         buffer_append(grayscale_obs)
                 
-else:
-    print("Ok, just watch")
-    env.render()
-    time.sleep(5)
-    
 
-
-
-
-
-
+'''------------------------Save the model---------------------------------------------------------------------------------'''
 rspounce = input("Do you want to save the model? (y/n): ")
+
 if rspounce == 'y':
     for agent in range(2):
         torch.save(dqn_agents[agent].state_dict(), f"agent_{agent}_{save_file_as}")
     print("Model saved successfully!")
+
 elif rspounce == 'n':
     print("Model not saved!")
+
 else:
     for agent in range(2):
         torch.save(dqn_agents[agent].state_dict(), f"agent_{agent}_{save_file_as}")

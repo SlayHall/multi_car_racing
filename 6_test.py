@@ -324,7 +324,7 @@ optimizers = [torch.optim.Adam(dqn_agents[i].parameters(), lr=aadam_learning_rat
 
 gamma = 0.99
 
-batch_size = 64
+batch_size = 16
 
 render_every = 50
 
