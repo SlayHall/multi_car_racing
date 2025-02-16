@@ -80,12 +80,12 @@ def update_conv_weights(conv_layer, axes, title):
 
 '''#--------------------------------------------------------------
 '''
-# Initialize a single figure with subplots for all 4 layers of the first agent
-fig, axes = plt.subplots(4, 8, figsize=(16, 8))  # 4 rows (one for each layer), 8 columns (for filters)
-fig.suptitle("Agent 0 Conv Layers Weights", fontsize=16)
+# # Initialize a single figure with subplots for all 4 layers of the first agent
+# fig, axes = plt.subplots(4, 8, figsize=(16, 8))  # 4 rows (one for each layer), 8 columns (for filters)
+# fig.suptitle("Agent 0 Conv Layers Weights", fontsize=16)
 
-# Flatten the axes for easier indexing
-axes = axes.flatten()
+# # Flatten the axes for easier indexing
+# axes = axes.flatten()
 
 def update_all_conv_weights(agent, axes):
     layers = [agent.conv1, agent.conv2, agent.conv3, agent.conv4]  # List of all convolutional layers
@@ -237,6 +237,8 @@ class DQN(nn.Module):
         return x
 
 
+
+
 # select computing device and number of episodes-----------------------------------------------------------
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 if torch.cuda.is_available() or torch.backends.mps.is_available():
@@ -291,16 +293,22 @@ for i in range(2):
     target_dqns[i].eval()  # Set the target network to evaluation mode
 
 '''------------------------------------ debuging gradiants---------------------------------------------'''
-# Initialize a dictionary to store gradients
-gradients = {name: [] for name, _ in dqn_agents[0].named_parameters()}
+# Initialize a dictionary to store gradient norms
+gradient_norms = {name: [] for name, _ in dqn_agents[0].named_parameters()}
 
-# Initialize the plot
+# Initialize the plot for gradient norms
 fig, ax = plt.subplots(figsize=(12, 8))
-lines = {name: ax.plot([], [], label=name)[0] for name in gradients.keys()}
 ax.set_xlabel("Training Step")
 ax.set_ylabel("Gradient Norm")
 ax.set_title("Gradient Norm Over Time")
+lines = {name: ax.plot([], [], label=name)[0] for name in gradient_norms.keys()}
 ax.legend()
+
+# # Initialize the plot for gradient histograms
+# fig, axes = plt.subplots(2, 2, figsize=(12, 8))  # Adjust subplot layout as needed
+# axes = axes.flatten()
+# plt.suptitle("Gradient Histograms")
+
 '''---------------------------------------------------------------------------------'''
 
 
@@ -308,19 +316,19 @@ ax.legend()
 target_update_frequency = 10    # Update the target network every 10 episodes
 
 epsilon = 1.0
-epsilon_decay = 0.995
+epsilon_decay = 0.996
 epsilon_min = 0.05
 
-aadam_learning_rate = 0.001
+aadam_learning_rate = 0.0001
 optimizers = [torch.optim.Adam(dqn_agents[i].parameters(), lr=aadam_learning_rate) for i in range(2)]
 
 gamma = 0.99
 
-batch_size = 32
+batch_size = 64
 
 render_every = 50
 
-num_episodes = 300
+num_episodes = 1000
 
 episode_durations = []
 
@@ -462,11 +470,11 @@ for i_episode in range(num_episodes):              # Initialize the episode
                 torch.nn.utils.clip_grad_norm_(dqn_agents[agent].parameters(), max_norm=1.0)
                 
                 
-                # Compute and store gradient norms
+                # Collect gradient norms (only for key layers)
                 for name, param in dqn_agents[agent].named_parameters():
-                    if param.grad is not None:
+                    if param.grad is not None and "conv1" in name or "conv4" in name or "fc1" in name or "fc2" in name:
                         grad_norm = param.grad.norm().item()  # Compute the norm of the gradient
-                        gradients[name].append(grad_norm)     # Store the gradient norm
+                        gradient_norms[name].append(grad_norm)
 
 
                 optimizers[agent].step()        # Update the DQN parameters
@@ -482,26 +490,38 @@ for i_episode in range(num_episodes):              # Initialize the episode
     torch.cuda.empty_cache()                             # Clear the cache to prevent memory leaks
     epsilon = max(epsilon * epsilon_decay, epsilon_min)
 
-
-    # Visualize weights at the specified frequency
-    if i_episode % wight_ploting_frq == 0:
-        update_all_conv_weights(dqn_agents[0], axes)  # Update weights for the first agent only
+    '''-------------------plots--------------------------------'''
+    # # Visualize weights at the specified frequency
+    # if i_episode % wight_ploting_frq == 0:
+    #     update_all_conv_weights(dqn_agents[0], axes)  # Update weights for the first agent only
     
     
-# Update the plot at the end of each episode
-    for name, line in lines.items():
-        line.set_xdata(range(len(gradients[name])))  # Update x-axis data
-        line.set_ydata(gradients[name])  # Update y-axis data
+# # Update the plot at the end of each episode
+#     for name, line in lines.items():
+#         line.set_xdata(range(len(gradients[name])))  # Update x-axis data
+#         line.set_ydata(gradients[name])  # Update y-axis data
 
-    # Rescale and redraw the plot
-    ax.relim()
-    ax.autoscale_view()
-    plt.draw()
-    plt.pause(0.01)  # Allow time for the plot to update
+#     # Rescale and redraw the plot
+#     ax.relim()
+#     ax.autoscale_view()
+#     plt.draw()
+#     plt.pause(0.01)  # Allow time for the plot to update
+
+
+# Plot gradient norms at the end of each episode
+    if i_episode % 1 == 0:  # Plot every episode (adjust frequency as needed)
+        for name, line in lines.items():
+            if name in gradient_norms:  # Only update lines for layers we're tracking
+                line.set_xdata(range(len(gradient_norms[name])))
+                line.set_ydata(gradient_norms[name])
+        ax.relim()
+        ax.autoscale_view()
+        plt.draw()
+        plt.pause(0.01)  # Allow time for the plot to update
 
     # Clear the gradient storage for the next episode
-    for name in gradients.keys():
-        gradients[name].clear()
+    for name in gradient_norms.keys():
+        gradient_norms[name].clear()
 
 
     # if i_episode % render_every == 0:
